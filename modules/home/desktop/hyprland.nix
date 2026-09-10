@@ -310,8 +310,10 @@ in
         package.loaded["noctalia"] = nil
         require("noctalia").apply_theme()
       end
-      apply_noctalia_theme()
-      hl.on("config.reloaded", apply_noctalia_theme)
+      -- Config values are committed after this file is evaluated, so apply the
+      -- generated theme on the next event-loop tick instead of being reset to
+      -- Hyprland's defaults at the end of a reload.
+      hl.timer(apply_noctalia_theme, { timeout = 1, type = "oneshot" })
     '';
   };
 
