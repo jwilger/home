@@ -102,7 +102,10 @@ in
         animations.enabled = true;
         cursor = {
           default_monitor =
-            if config.jwilger.hostProfile == "jwilger-t14" then "desc:Apple Inc. StudioDisplay" else "DP-3";
+            if config.jwilger.hostProfile == "jwilger-t14" then
+              "desc:Apple Computer Inc StudioDisplay"
+            else
+              "DP-3";
           no_hardware_cursors = 0;
         };
       };
@@ -113,9 +116,9 @@ in
             {
               _args = [
                 {
-                  output = "desc:Apple Inc. StudioDisplay";
-                  mode = "5120x2880@60";
-                  position = "0x0";
+                  output = "eDP-1";
+                  mode = "2880x1800@60";
+                  position = "0x540";
                   scale = 2.0;
                 }
               ];
@@ -123,10 +126,10 @@ in
             {
               _args = [
                 {
-                  output = "";
-                  mode = "preferred";
-                  position = "auto-left";
-                  scale = "auto";
+                  output = "desc:Apple Computer Inc StudioDisplay";
+                  mode = "5120x2880@60";
+                  position = "1440x0";
+                  scale = 2.0;
                 }
               ];
             }
