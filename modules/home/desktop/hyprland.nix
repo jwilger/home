@@ -306,14 +306,9 @@ in
       -- Home Manager symlinks this config into the Nix store. Resolve writable
       -- theme modules from the user's config directory, not the symlink target.
       package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
-      local function apply_noctalia_theme()
-        package.loaded["noctalia"] = nil
-        require("noctalia").apply_theme()
-      end
       -- Config values are committed after this file is evaluated, so apply the
-      -- generated theme on the next event-loop tick instead of being reset to
-      -- Hyprland's defaults at the end of a reload.
-      noctalia_theme_timer = hl.timer(apply_noctalia_theme, { timeout = 1, type = "oneshot" })
+      -- generated theme from a short-lived subprocess after each reload.
+      hl.exec_cmd(${builtins.toJSON "${pkgs.coreutils}/bin/sleep 0.1; ${pkgs.coreutils}/bin/env -u LD_LIBRARY_PATH ${pkgs.hyprland}/bin/hyprctl eval 'package.path=\"${config.xdg.configHome}/hypr/?.lua;\"..package.path; package.loaded[\"noctalia\"]=nil; require(\"noctalia\").apply_theme()'"})
     '';
   };
 
