@@ -1,0 +1,47 @@
+layout {
+	default_tab_template {
+		children
+		pane size=1 borderless=true {
+			plugin location="@zjstatus_wasm@" {
+				format_left   "{mode}#[fg=#1e1e2e,bg=#89B4FA,bold]{session}  #[fg=#89B4FA,bg=#1e1e2e]{tabs}"
+	            format_center "{command_git_branch}{command_git_status}"
+	            format_right  "#[fg=#1e1e2e,bg=#89B4FA]{datetime}"
+	            format_space  "#[bg=#1e1e2e]"
+
+	            format_hide_on_overlength "true"
+	            format_precedence         "lcr"
+
+	            tab_display_count          "3"
+	            tab_truncate_start_format  "#[fg=#6C7086,bg=#1e1e2e] < "
+	            tab_truncate_end_format    "#[fg=#6C7086,bg=#1e1e2e] > "
+
+	            command_git_branch_command    "bash -c 'b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0; [ ${#b} -gt 30 ] && echo \"…${b: -29}\" || echo \"$b\"'"
+	            command_git_branch_format     "#[fg=#cba6f7,bg=#1e1e2e] {stdout} "
+	            command_git_branch_interval   "5"
+	            command_git_branch_rendermode "static"
+
+	            command_git_status_command    "bash -c 's=\"\"; git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null || s=\"●\"; ab=$(git rev-list --left-right --count HEAD...@{u} 2>/dev/null) && { a=$(echo \"$ab\" | cut -f1); b=$(echo \"$ab\" | cut -f2); [ \"$a\" -gt 0 ] 2>/dev/null && s=\"$s↑$a\"; [ \"$b\" -gt 0 ] 2>/dev/null && s=\"$s↓$b\"; }; echo \"$s\"'"
+	            command_git_status_format     "#[fg=#f38ba8,bg=#1e1e2e] {stdout}"
+	            command_git_status_interval   "5"
+	            command_git_status_rendermode "static"
+
+	            hide_frame_for_single_pane "false"
+
+	            mode_normal  "#[fg=#1e1e2e,bg=#89B4FA,bold] "
+
+	            tab_normal              "#[fg=#1e1e2e,bg=#313244] #[fg=#cdd6f4,bg=#313244]{index}  {name} #[fg=#313244,bg=#1e1e2e]"
+	            tab_normal_fullscreen   "#[fg=#cdd6f4,bg=#1e1e2e] {index} {name} [] "
+	            tab_normal_sync         "#[fg=#cdd6f4,bg=#1e1e2e] {index} {name} <> "
+	            tab_active              "#[fg=#1e1e2e,bg=#cba6f7,bold,italic] #[fg=#1e1e2e,bg=#cba6f7,bold,italic]{index}  {name} #[fg=#cba6f7,bg=#1e1e2e]"
+	            tab_active_fullscreen   "#[fg=#1e1e2e,bg=#cba6f7,bold,italic] #[fg=#1e1e2e,bg=#cba6f7,bold,italic]{index} {name} [] #[fg=#cba6f7,bg=#1e1e2e]"
+	            tab_active_sync         "#[fg=#1e1e2e,bg=#cba6f7,bold,italic] #[fg=#1e1e2e,bg=#cba6f7,bold,italic]{index} {name} <> #[fg=#cba6f7,bg=#1e1e2e]"
+
+
+	            datetime          "#[fg=#1e1e2e,bg=#89B4FA,bold] {format} "
+	            datetime_format   "%d %b %H:%M"
+	            datetime_timezone "America/Los_Angeles"
+				border_enabled "false"
+			}
+		}
+	}
+}
