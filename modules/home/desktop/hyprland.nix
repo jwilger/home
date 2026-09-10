@@ -300,11 +300,11 @@ in
     };
 
     extraConfig = ''
-      -- Noctalia rewrites noctalia.lua when its color template changes.
-      local noctalia_ok, noctalia_theme = pcall(require, "noctalia")
-      if noctalia_ok then
-        noctalia_theme.apply_theme()
-      end
+      -- Home Manager symlinks this config into the Nix store. Resolve writable
+      -- theme modules from the user's config directory, not the symlink target.
+      package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
+      package.loaded["noctalia"] = nil
+      require("noctalia").apply_theme()
     '';
   };
 
