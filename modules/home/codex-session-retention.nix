@@ -52,11 +52,11 @@ in
 {
   systemd.user.services = {
     codex-session-prune = {
-      Unit.Description = "Prune stale local Codex sessions";
-      unitConfig = {
+      Unit = {
+        Description = "Prune stale local Codex sessions";
         ConditionPathIsExecutable = codex;
       };
-      serviceConfig = {
+      Service = {
         ExecStart = "${codexSessionPrune}/bin/codex-session-prune";
         Type = "oneshot";
       };
