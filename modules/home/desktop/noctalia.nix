@@ -46,24 +46,28 @@ let
   };
 in
 {
-  # Inherit the compositor's environment immediately. Waiting for UWSM's
-  # polled environment import exposes the default wallpaper during startup.
-  # A transient service retains supervision and ends with the session.
-  wayland.windowManager.hyprland.extraConfig = ''
-    hl.on("hyprland.start", function()
-      hl.exec_cmd(${builtins.toJSON "uwsm app -t service -s background.slice -u noctalia-shell.service -p Restart=on-failure -p PartOf=graphical-session.target -- ${pkgs.coreutils}/bin/env WAYLAND_DISPLAY=\"$WAYLAND_DISPLAY\" HYPRLAND_INSTANCE_SIGNATURE=\"$HYPRLAND_INSTANCE_SIGNATURE\" DISPLAY=\"$DISPLAY\" ${lib.getExe noctaliaPkg}"})
-    end)
-  '';
-
   systemd.user.services = {
     noctalia-wallpaper = {
       Unit = {
         Description = "Apply the managed Noctalia wallpaper";
-        After = [ "wayland-session-waitenv.service" ];
+        After = [ "noctalia-hyprland.service" ];
+        Wants = [ "noctalia-hyprland.service" ];
       };
       Service = {
         Type = "oneshot";
         ExecStart = "${noctaliaWallpaper}/bin/noctalia-wallpaper";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+    noctalia-hyprland = {
+      Unit = {
+        Description = "Noctalia shell for the Hyprland session";
+        After = [ "wayland-session-waitenv.service" ];
+        PartOf = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = lib.getExe noctaliaPkg;
+        Restart = "on-failure";
       };
       Install.WantedBy = [ "graphical-session.target" ];
     };

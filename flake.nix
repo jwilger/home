@@ -74,6 +74,20 @@
       checks.${system} = {
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
+        noctalia-startup-order = pkgs.runCommand "check-noctalia-startup-order" { } ''
+          homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
+          userUnits="$homeFiles/.config/systemd/user"
+
+          test -L "$userUnits/graphical-session.target.wants/noctalia-hyprland.service"
+          test -L "$userUnits/graphical-session.target.wants/noctalia-wallpaper.service"
+          grep -Fqx 'After=wayland-session-waitenv.service' "$userUnits/noctalia-hyprland.service"
+          grep -Fqx 'PartOf=graphical-session.target' "$userUnits/noctalia-hyprland.service"
+          grep -Fqx 'Wants=noctalia-hyprland.service' "$userUnits/noctalia-wallpaper.service"
+          grep -Fqx 'After=noctalia-hyprland.service' "$userUnits/noctalia-wallpaper.service"
+          ! grep -Fq 'noctalia-shell.service' "$homeFiles/.config/hypr/hyprland.lua"
+
+          touch "$out"
+        '';
         interface =
           assert self.homeModules.default == self.homeModules.jwilger;
           pkgs.emptyDirectory;
