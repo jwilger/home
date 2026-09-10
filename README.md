@@ -20,4 +20,4 @@ Noctalia starts from a repository-owned immutable baseline that activation
 copies into writable user configuration. After intentional UI changes, run
 `just capture-noctalia`; it copies only the reviewed allowlist back to the
 repository and leaves the Git diff uncommitted for inspection. Generated state
-and `plugins/github-feed/settings.json` are never captured.
+and plugin data are never captured.

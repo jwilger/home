@@ -21,6 +21,7 @@ order = [ "main" ]
         "recorder",
         "screenshot",
         "tray",
+        "battery",
         "spacer_4",
         "control-center",
         "spacer"
@@ -36,7 +37,7 @@ order = [ "main" ]
     thickness = 34
     widget_spacing = 6
 
-[battery.device."/org/freedesktop/UPower/devices/ups_hiddev1"]
+[battery]
 warning_threshold = 20
 
 [brightness]
@@ -248,6 +249,12 @@ unit = "fahrenheit"
 
 [widget.active_window]
 max_length = 600
+
+[widget.battery]
+device = "auto"
+display_mode = "glyph"
+label_content = "percent"
+show_label = true
 
 [widget.control-center]
 custom_image = "/home/jwilger/.config/noctalia/assets/nixos.svg"

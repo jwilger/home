@@ -10,9 +10,6 @@ let
   noctaliaBaseline = pkgs.runCommand "noctalia-writable-baseline" { } ''
     mkdir -p "$out/config" "$out/state"
     cp ${./noctalia/config.toml} "$out/config/config.toml"
-    cp ${./noctalia/settings.json} "$out/config/settings.json"
-    cp ${./noctalia/colors.json} "$out/config/colors.json"
-    cp ${./noctalia/plugins.json} "$out/config/plugins.json"
     cp ${./noctalia/settings.toml} "$out/state/settings.toml"
   '';
   wallpaperPath = "${config.home.homeDirectory}/.local/share/wallpapers/wallpaper.png";
@@ -94,9 +91,7 @@ in
     configDir="$HOME/.config/noctalia"
     stateDir="$HOME/.local/state/noctalia"
     mkdir -p "$configDir" "$stateDir"
-    for file in config.toml settings.json colors.json plugins.json; do
-      install -m 0600 "${noctaliaBaseline}/config/$file" "$configDir/$file"
-    done
+    install -m 0600 "${noctaliaBaseline}/config/config.toml" "$configDir/config.toml"
     install -m 0600 "${noctaliaBaseline}/state/settings.toml" "$stateDir/settings.toml"
   '';
 

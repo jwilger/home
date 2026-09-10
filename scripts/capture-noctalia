@@ -6,9 +6,7 @@ source_config="${XDG_CONFIG_HOME:-$HOME/.config}/noctalia"
 source_state="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia"
 destination="$repository/modules/home/desktop/noctalia"
 
-for file in config.toml settings.json colors.json plugins.json; do
-  install -m 0644 "$source_config/$file" "$destination/$file"
-done
+install -m 0644 "$source_config/config.toml" "$destination/config.toml"
 install -m 0644 "$source_state/settings.toml" "$destination/settings.toml"
 
 echo "Captured the safe Noctalia baseline allowlist. Review the uncommitted Git diff."
