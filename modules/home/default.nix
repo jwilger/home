@@ -1,8 +1,34 @@
 {
   config,
+  jwilgerInputs,
   lib,
+  pkgs,
   ...
 }:
+let
+  upstreamHomeManager =
+    jwilgerInputs.home-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  remoteHomeManager = pkgs.writeShellApplication {
+    name = "home-manager";
+    text = ''
+      is_switch=false
+      has_flake=false
+
+      for arg in "$@"; do
+        case "$arg" in
+          switch) is_switch=true ;;
+          --flake | --flake=*) has_flake=true ;;
+        esac
+      done
+
+      if [[ "$is_switch" == true && "$has_flake" == false ]]; then
+        set -- "$@" --flake ${lib.escapeShellArg "github:jwilger/home#jwilger@${config.jwilger.hostProfile}"}
+      fi
+
+      exec ${lib.getExe upstreamHomeManager} "$@"
+    '';
+  };
+in
 {
   imports = [
     ./abduco.nix
@@ -51,6 +77,7 @@
     ];
 
     home.stateVersion = "24.11";
+    home.packages = [ (lib.hiPrio remoteHomeManager) ];
     programs.home-manager.enable = true;
     programs.lanyard-ssh-agent.enable = config.jwilger.hostProfile == "gregor";
   };
