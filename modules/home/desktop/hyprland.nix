@@ -60,6 +60,10 @@ in
       config = {
         general = {
           border_size = 2;
+          col = {
+            active_border = "rgb(cba6f7)";
+            inactive_border = "rgb(1e1e2e)";
+          };
           gaps_in = 4;
           gaps_out = 4;
           layout = "scrolling";
@@ -302,14 +306,6 @@ in
       ++ workspaceBinds;
     };
 
-    extraConfig = ''
-      -- Home Manager symlinks this config into the Nix store. Resolve writable
-      -- theme modules from the user's config directory, not the symlink target.
-      package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
-      -- Config values are committed after this file is evaluated, so apply the
-      -- generated theme from a short-lived subprocess after each reload.
-      hl.exec_cmd(${builtins.toJSON "${pkgs.coreutils}/bin/sleep 0.1; ${pkgs.coreutils}/bin/env -u LD_LIBRARY_PATH ${pkgs.hyprland}/bin/hyprctl eval 'package.path=\"${config.xdg.configHome}/hypr/?.lua;\"..package.path; package.loaded[\"noctalia\"]=nil; require(\"noctalia\").apply_theme()'"})
-    '';
   };
 
   # Seed a writable theme module. Noctalia replaces it in-place later; keeping
@@ -320,4 +316,5 @@ in
       install -m 0644 ${noctaliaThemeSeed} "$HOME/.config/hypr/noctalia.lua"
     fi
   '';
+
 }
