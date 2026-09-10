@@ -10,14 +10,14 @@ let
     name = "chrome-personal";
     runtimeInputs = [ browserPackage ];
     text = ''
-      exec ${browserExe} --profile-directory=Default "$@"
+      exec ${browserExe} --profile-directory="Profile 1" "$@"
     '';
   };
   chrome10kr = pkgs.writeShellApplication {
     name = "chrome-10kr";
     runtimeInputs = [ browserPackage ];
     text = ''
-      exec ${browserExe} --profile-directory="Profile 5" "$@"
+      exec ${browserExe} --profile-directory=Default "$@"
     '';
   };
   chromePick = pkgs.writeShellApplication {
