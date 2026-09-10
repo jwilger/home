@@ -70,18 +70,6 @@ in
       };
       Install.WantedBy = [ "graphical-session.target" ];
     };
-    onepassword-hyprland = {
-      Unit = {
-        Description = "1Password for the Hyprland session";
-        After = [
-          "graphical-session.target"
-          "wayland-session-waitenv.service"
-        ];
-        PartOf = [ "graphical-session.target" ];
-      };
-      Service.ExecStart = "${pkgs._1password-gui}/bin/1password --silent";
-      Install.WantedBy = [ "graphical-session.target" ];
-    };
   };
 
   xdg.configFile = {
