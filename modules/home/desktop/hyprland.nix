@@ -306,8 +306,12 @@ in
       -- Home Manager symlinks this config into the Nix store. Resolve writable
       -- theme modules from the user's config directory, not the symlink target.
       package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
-      package.loaded["noctalia"] = nil
-      require("noctalia").apply_theme()
+      local function apply_noctalia_theme()
+        package.loaded["noctalia"] = nil
+        require("noctalia").apply_theme()
+      end
+      apply_noctalia_theme()
+      hl.on("config.reloaded", apply_noctalia_theme)
     '';
   };
 
