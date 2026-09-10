@@ -54,7 +54,7 @@ in
     codex-session-prune = {
       Unit = {
         Description = "Prune stale local Codex sessions";
-        ConditionPathIsExecutable = codex;
+        ConditionFileIsExecutable = codex;
       };
       Service = {
         ExecStart = "${codexSessionPrune}/bin/codex-session-prune";
