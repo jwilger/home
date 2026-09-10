@@ -52,6 +52,9 @@ in
     configType = "lua";
     package = pkgs.hyprland;
     portalPackage = null;
+    # UWSM owns the graphical session lifecycle. Home Manager's separate
+    # hyprland-session target races UWSM during login and can stop the session.
+    systemd.enable = false;
 
     settings = {
       config = {

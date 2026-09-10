@@ -9,7 +9,7 @@
     };
   };
 
-  home.packages = lib.optionals pkgs.stdenv.isLinux (
+  home.packages = lib.optionals pkgs.stdenv.hostPlatform.isLinux (
     with pkgs;
     [
       nvtopPackages.intel

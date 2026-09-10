@@ -61,27 +61,27 @@ in
         Type = "oneshot";
         ExecStart = "${noctaliaWallpaper}/bin/noctalia-wallpaper";
       };
-      Install.WantedBy = [ "hyprland-session.target" ];
+      Install.WantedBy = [ "graphical-session.target" ];
     };
     noctalia-hyprland = {
       Unit = {
         Description = "Noctalia shell for the Hyprland session";
-        PartOf = [ "hyprland-session.target" ];
+        PartOf = [ "graphical-session.target" ];
       };
       Service = {
         ExecStart = lib.getExe noctaliaPkg;
         Restart = "on-failure";
       };
-      Install.WantedBy = [ "hyprland-session.target" ];
+      Install.WantedBy = [ "graphical-session.target" ];
     };
     onepassword-hyprland = {
       Unit = {
         Description = "1Password for the Hyprland session";
-        After = [ "hyprland-session.target" ];
-        PartOf = [ "hyprland-session.target" ];
+        After = [ "graphical-session.target" ];
+        PartOf = [ "graphical-session.target" ];
       };
       Service.ExecStart = "${pkgs._1password-gui}/bin/1password --silent";
-      Install.WantedBy = [ "hyprland-session.target" ];
+      Install.WantedBy = [ "graphical-session.target" ];
     };
   };
 

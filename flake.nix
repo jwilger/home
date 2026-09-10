@@ -59,7 +59,6 @@
         jwilger = {
           imports = [
             inputs.catppuccin.homeModules.catppuccin
-            inputs.lanyard.homeManagerModules.default
             ./modules/home
           ];
           _module.args.jwilgerInputs = inputs;

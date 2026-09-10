@@ -17,6 +17,7 @@
     ./git.nix
     ./helix
     ./lazygit.nix
+    ./lanyard.nix
     ./packages.nix
     ./ssh.nix
     ./starship.nix

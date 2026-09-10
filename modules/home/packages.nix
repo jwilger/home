@@ -95,7 +95,7 @@ in
         zip
       ]
       # Linux-only packages
-      ++ lib.optionals pkgs.stdenv.isLinux [
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         bc # calculator for audio processing
         bubblewrap
         codeql
@@ -105,6 +105,8 @@ in
         gparted # partition manager
         gtrash # rm replacement, put deleted files in system trash
         libnotify
+        nerd-fonts.jetbrains-mono
+        nerd-fonts.noto
         nitch # systhem fetch util
         pamixer # command-line audio mixer
         pipx # Python package installer for Piper TTS
@@ -112,6 +114,7 @@ in
         poweralertd
         pulseaudio # provides paplay for audio playback
         sox # audio effects processing
+        twemoji-color-font
         wl-clipboard # clipboard utils for wayland (wl-copy, wl-paste)
         wlogout
         xdg-utils
@@ -121,5 +124,5 @@ in
       ]
     )
     ++ helixTooling
-    ++ lib.optionals pkgs.stdenv.isLinux helixToolingLinux;
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux helixToolingLinux;
 }
