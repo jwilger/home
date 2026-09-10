@@ -313,7 +313,7 @@ in
       -- Config values are committed after this file is evaluated, so apply the
       -- generated theme on the next event-loop tick instead of being reset to
       -- Hyprland's defaults at the end of a reload.
-      hl.timer(apply_noctalia_theme, { timeout = 1, type = "oneshot" })
+      noctalia_theme_timer = hl.timer(apply_noctalia_theme, { timeout = 1, type = "oneshot" })
     '';
   };
 
