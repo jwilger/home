@@ -350,6 +350,7 @@ in
       -- direct Hyprland sessions; neither path has to wait for a session
       -- target after Hyprland is already displaying its default background.
       hl.on("hyprland.start", function()
+        hl.exec_cmd("env ELECTRON_OZONE_PLATFORM_HINT=auto NIXOS_OZONE_WL=1 ${pkgs._1password-gui}/bin/1password --silent")
         hl.exec_cmd("noctalia --daemon")
       end)
     '';

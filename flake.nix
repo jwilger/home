@@ -88,6 +88,14 @@
 
           touch "$out"
         '';
+        onepassword-startup = pkgs.runCommand "check-onepassword-startup" { } ''
+          homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
+          hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"
+
+          grep -Fq '1password --silent' "$hyprlandConfig"
+
+          touch "$out"
+        '';
         hyprland-catppuccin-borders = pkgs.runCommand "check-hyprland-catppuccin-borders" { } ''
           hyprlandConfig=${
             self.homeConfigurations."jwilger@jwilger-t14".activationPackage
