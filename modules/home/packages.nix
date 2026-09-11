@@ -1,10 +1,12 @@
 {
   config,
+  jwilgerInputs,
   pkgs,
   lib,
   ...
 }:
 let
+  unstableSmallPkgs = jwilgerInputs.nixpkgs-small.legacyPackages.${pkgs.stdenv.hostPlatform.system};
   # Conservative ad-hoc-editor toolset only. Project-specific toolchains
   # and LSPs (rust-analyzer, gopls, elixir-ls, haskell-language-server,
   # terraform-ls, texlab, typescript-language-server, zls, etc.) and the
@@ -109,7 +111,7 @@ in
         nerd-fonts.noto
         nitch # systhem fetch util
         pamixer # command-line audio mixer
-        pipx # Python package installer for Piper TTS
+        unstableSmallPkgs.pipx # Python package installer for Piper TTS
         pre-commit
         poweralertd
         pulseaudio # provides paplay for audio playback
