@@ -93,6 +93,9 @@
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"
 
           grep -Fq '1password --silent' "$hyprlandConfig"
+          grep -Fq 'op read --no-newline' "$hyprlandConfig"
+          grep -Fq 'op://Personal/gqwzhhx32czatrq4wckuqzzo5q/password' "$hyprlandConfig"
+          grep -Fq 'gnome-keyring-daemon --unlock' "$hyprlandConfig"
 
           touch "$out"
         '';
