@@ -33,15 +33,25 @@
       ];
     };
 
-    initContent = ''
-      if [[ -n "$SSH_CONNECTION" ]]; then
-          export OP_BIOMETRIC_UNLOCK_ENABLED=false
-      fi
+    initContent = lib.mkMerge [
+      (lib.mkOrder 500 ''
+        # Oh My Zsh's Docker plugin copies a completion from the immutable Nix
+        # store, preserving its read-only mode, and refreshes it on later starts.
+        for completion in ''${XDG_CACHE_HOME:-$HOME/.cache}/oh-my-zsh/completions/*(N); do
+          [[ -O "$completion" && ! -w "$completion" ]] && chmod u+w -- "$completion"
+        done
+        unset completion
+      '')
+      (lib.mkOrder 1000 ''
+        if [[ -n "$SSH_CONNECTION" ]]; then
+            export OP_BIOMETRIC_UNLOCK_ENABLED=false
+        fi
 
-      # Zellij 0.43.1+ natively manages terminal title with session name.
-      # Shell-based title setting is disabled as zellij intercepts OSC sequences.
-      # See: https://github.com/zellij-org/zellij/pull/3898 for session-switch title fix.
-    '';
+        # Zellij 0.43.1+ natively manages terminal title with session name.
+        # Shell-based title setting is disabled as zellij intercepts OSC sequences.
+        # See: https://github.com/zellij-org/zellij/pull/3898 for session-switch title fix.
+      '')
+    ];
 
     shellAliases = {
       # Utils
