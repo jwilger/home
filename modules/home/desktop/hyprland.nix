@@ -50,7 +50,10 @@ in
   wayland.windowManager.hyprland = {
     enable = true;
     configType = "lua";
-    package = pkgs.hyprland;
+    # NixOS owns the compositor on the T14. Keeping it out of the Home Manager
+    # profile ensures hyprctl and the running Hyprland always come from the
+    # same package set.
+    package = if config.jwilger.hostProfile == "jwilger-t14" then null else pkgs.hyprland;
     portalPackage = null;
     # UWSM owns the graphical session lifecycle. Home Manager's separate
     # hyprland-session target races UWSM during login and can stop the session.
@@ -302,6 +305,7 @@ in
         (exec "XF86AudioRaiseVolume" "pamixer -i 5")
         (exec "XF86AudioLowerVolume" "pamixer -d 5")
         (exec "XF86AudioMute" "pamixer -t")
+        (exec "XF86AudioMicMute" "pamixer --default-source -t")
         (exec "SUPER + M" "pamixer --default-source -t")
         (exec "SUPER + N" "noctalia msg notification-clear-active")
         (exec "SUPER + SHIFT + N" "noctalia msg notification-dnd-toggle")
