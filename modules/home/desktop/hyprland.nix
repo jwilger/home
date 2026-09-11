@@ -349,9 +349,10 @@ in
       -- Start Noctalia from the compositor so this works with both UWSM and
       -- direct Hyprland sessions; neither path has to wait for a session
       -- target after Hyprland is already displaying its default background.
+      -- 1Password and the GNOME Keyring unlock are user services. Keeping
+      -- them out of this hook lets the unlock service wait for the desktop
+      -- app and its CLI integration to become ready.
       hl.on("hyprland.start", function()
-        hl.exec_cmd("env ELECTRON_OZONE_PLATFORM_HINT=auto NIXOS_OZONE_WL=1 ${pkgs._1password-gui}/bin/1password --silent")
-        hl.exec_cmd("${pkgs._1password-cli}/bin/op read --no-newline 'op://Personal/gqwzhhx32czatrq4wckuqzzo5q/password' | ${pkgs.gnome-keyring}/bin/gnome-keyring-daemon --unlock")
         hl.exec_cmd("noctalia --daemon")
       end)
     '';

@@ -91,11 +91,28 @@
         onepassword-startup = pkgs.runCommand "check-onepassword-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"
+          onepasswordService="$homeFiles/.config/systemd/user/tenkr-onepassword.service"
+          onepasswordCliService="$homeFiles/.config/systemd/user/tenkr-onepassword-cli.service"
+          keyringService="$homeFiles/.config/systemd/user/tenkr-gnome-keyring-unlock.service"
+          unlockScript="$(sed -n 's/^ExecStart=//p' "$keyringService")"
 
-          grep -Fq '1password --silent' "$hyprlandConfig"
-          grep -Fq 'op read --no-newline' "$hyprlandConfig"
-          grep -Fq 'op://Personal/gqwzhhx32czatrq4wckuqzzo5q/password' "$hyprlandConfig"
-          grep -Fq 'gnome-keyring-daemon --unlock' "$hyprlandConfig"
+          test ! -e "$hyprlandConfig" || ! grep -Fq '1password --silent' "$hyprlandConfig"
+          test ! -e "$hyprlandConfig" || ! grep -Fq 'op read --no-newline' "$hyprlandConfig"
+          grep -Fq 'After=wayland-session-waitenv.service' "$onepasswordService"
+          ! grep -Eq '^After=([^[:space:]]+[[:space:]]+)*graphical-session\.target([[:space:]]|$)' "$onepasswordService"
+          grep -Fq '1password --silent' "$onepasswordService"
+          grep -Fq 'Wants=tenkr-onepassword.service' "$onepasswordCliService"
+          grep -Fq 'OP_SOCK=%t/onepassword/op-daemon.sock' "$onepasswordCliService"
+          grep -Fq 'onepassword-cli-daemon' "$onepasswordCliService"
+          grep -Fq 'Wants=tenkr-onepassword-cli.service' "$keyringService"
+          grep -Fq 'After=tenkr-onepassword-cli.service' "$keyringService"
+          grep -Fq 'PartOf=graphical-session.target' "$keyringService"
+          grep -Fq 'WantedBy=graphical-session.target' "$keyringService"
+          test -x "$unlockScript"
+          grep -Fq 'read --no-newline' "$unlockScript"
+          grep -Fq -- "--account 'MRECLJED3JFMFCCB6ZS3D5AIZU'" "$unlockScript"
+          grep -Fq 'op://Personal/gqwzhhx32czatrq4wckuqzzo5q/password' "$unlockScript"
+          grep -Fq 'gnome-keyring-daemon --unlock' "$unlockScript"
 
           touch "$out"
         '';
