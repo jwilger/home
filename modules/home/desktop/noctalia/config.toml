@@ -232,6 +232,7 @@ enabled = true
 fill_mode = "crop"
 transition = [ "fade", "wipe", "disc", "stripes", "zoom", "honeycomb" ]
 transition_duration = 1500
+transition_on_startup = false
 
     [wallpaper.default]
     path = "~/.local/share/wallpapers/wallpaper.png"

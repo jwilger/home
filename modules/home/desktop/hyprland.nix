@@ -72,6 +72,11 @@ in
           layout = "scrolling";
         };
 
+        misc = {
+          background_color = "rgb(11111b)";
+          disable_hyprland_logo = true;
+        };
+
         group = {
           col = {
             border_active = "rgb(fab387)";
@@ -331,6 +336,23 @@ in
       ++ workspaceBinds;
     };
 
+    extraConfig = ''
+      -- Resolve the writable Noctalia theme module before the compositor's
+      -- first frame. The declarative colors above remain the safe fallback
+      -- until Noctalia has written its current palette.
+      package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
+      local noctalia_ok, noctalia_theme = pcall(require, "noctalia")
+      if noctalia_ok then
+        noctalia_theme.apply_theme()
+      end
+
+      -- Start Noctalia from the compositor so this works with both UWSM and
+      -- direct Hyprland sessions; neither path has to wait for a session
+      -- target after Hyprland is already displaying its default background.
+      hl.on("hyprland.start", function()
+        hl.exec_cmd("noctalia --daemon")
+      end)
+    '';
   };
 
   # Seed a writable theme module. Noctalia replaces it in-place later; keeping

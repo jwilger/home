@@ -74,17 +74,17 @@
       checks.${system} = {
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
-        noctalia-startup-order = pkgs.runCommand "check-noctalia-startup-order" { } ''
+        noctalia-startup-order = pkgs.runCommand "check-noctalia-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
-          userUnits="$homeFiles/.config/systemd/user"
+          hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"
+          noctaliaConfig=${./modules/home/desktop/noctalia/config.toml}
 
-          test -L "$userUnits/graphical-session.target.wants/noctalia-hyprland.service"
-          test -L "$userUnits/graphical-session.target.wants/noctalia-wallpaper.service"
-          grep -Fqx 'After=wayland-session-waitenv.service' "$userUnits/noctalia-hyprland.service"
-          grep -Fqx 'PartOf=graphical-session.target' "$userUnits/noctalia-hyprland.service"
-          grep -Fqx 'Wants=noctalia-hyprland.service' "$userUnits/noctalia-wallpaper.service"
-          grep -Fqx 'After=noctalia-hyprland.service' "$userUnits/noctalia-wallpaper.service"
-          ! grep -Fq 'noctalia-shell.service' "$homeFiles/.config/hypr/hyprland.lua"
+          grep -Fq 'hl.on("hyprland.start"' "$hyprlandConfig"
+          grep -Fq 'noctalia --daemon' "$hyprlandConfig"
+          grep -Fq '["disable_hyprland_logo"] = true' "$hyprlandConfig"
+          grep -Fq 'transition_on_startup = false' "$noctaliaConfig"
+          test ! -e "$homeFiles/.config/systemd/user/noctalia-hyprland.service"
+          test ! -e "$homeFiles/.config/systemd/user/noctalia-wallpaper.service"
 
           touch "$out"
         '';

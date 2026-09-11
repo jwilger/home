@@ -13,26 +13,6 @@ let
     cp ${./noctalia/settings.toml} "$out/state/settings.toml"
   '';
   wallpaperPath = "${config.home.homeDirectory}/.local/share/wallpapers/wallpaper.png";
-  noctaliaWallpaper = pkgs.writeShellApplication {
-    name = "noctalia-wallpaper";
-    runtimeInputs = [
-      noctaliaPkg
-      pkgs.coreutils
-    ];
-    text = ''
-      attempt=0
-      while [ "$attempt" -lt 100 ]; do
-        if noctalia msg wallpaper-set "${wallpaperPath}"; then
-          exit 0
-        fi
-
-        attempt=$((attempt + 1))
-        sleep 0.1
-      done
-
-      exit 1
-    '';
-  };
   lockScreen = pkgs.writeShellScript "lock-screen" ''
     ${pkgs._1password-gui}/bin/1password --lock &
     ${noctaliaPkg}/bin/noctalia msg session lock
@@ -46,33 +26,6 @@ let
   };
 in
 {
-  systemd.user.services = {
-    noctalia-wallpaper = {
-      Unit = {
-        Description = "Apply the managed Noctalia wallpaper";
-        After = [ "noctalia-hyprland.service" ];
-        Wants = [ "noctalia-hyprland.service" ];
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = "${noctaliaWallpaper}/bin/noctalia-wallpaper";
-      };
-      Install.WantedBy = [ "graphical-session.target" ];
-    };
-    noctalia-hyprland = {
-      Unit = {
-        Description = "Noctalia shell for the Hyprland session";
-        After = [ "wayland-session-waitenv.service" ];
-        PartOf = [ "graphical-session.target" ];
-      };
-      Service = {
-        ExecStart = lib.getExe noctaliaPkg;
-        Restart = "on-failure";
-      };
-      Install.WantedBy = [ "graphical-session.target" ];
-    };
-  };
-
   xdg.configFile = {
     "noctalia/assets/nixos.svg".source =
       "${noctaliaPkg}/share/noctalia/assets/images/distros/nixos.svg";
@@ -116,10 +69,6 @@ in
     }
     EOF
     mv "$cacheTempFile" "$cacheFile"
-  '';
-
-  home.activation.noctaliaWallpaperLive = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
-    ${pkgs.systemd}/bin/systemctl --user start noctalia-wallpaper.service || true
   '';
 
   home.activation.noctaliaGithubFeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
