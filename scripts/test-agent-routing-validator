@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository="$(git rev-parse --show-toplevel)"
+validator="$repository/scripts/check-agent-routing"
+fixture="$(mktemp -d)"
+trap 'rm -rf "$fixture"' EXIT
+
+reset_fixture() {
+  rm -rf "$fixture/.agents" "$fixture/.codex"
+  rm -f "$fixture/AGENTS.md"
+  cp -R "$repository/.agents" "$fixture/.agents"
+  cp -R "$repository/.codex" "$fixture/.codex"
+  cp "$repository/AGENTS.md" "$fixture/AGENTS.md"
+}
+
+expect_failure() {
+  local description="$1"
+  if "$validator" "$fixture" >/dev/null 2>&1; then
+    printf 'validator unexpectedly accepted fixture: %s\n' "$description" >&2
+    exit 1
+  fi
+}
+
+reset_fixture
+"$validator" "$fixture" >/dev/null
+
+sed -i 's/model = "gpt-5.6-sol"/model = "gpt-5.6-luna"/' "$fixture/.codex/config.toml"
+expect_failure 'wrong effective main model'
+
+reset_fixture
+sed -i 's/plan_mode_reasoning_effort = "high"/plan_mode_reasoning_effort = "low"/'   "$fixture/.codex/config.toml"
+expect_failure 'wrong effective planning effort'
+
+reset_fixture
+sed -i '/the clear contract or approved RED test;/d'   "$fixture/.agents/skills/agent-routing/SKILL.md"
+expect_failure 'missing bounded-implementation contract'
+
+reset_fixture
+sed -i '/Terra is not a routine routing tier./i Prefer Terra for inventories.'   "$fixture/.agents/skills/agent-routing/SKILL.md"
+expect_failure 'routine Terra inventory rule'
+
+reset_fixture
+sed -i '/## Progressive escalation/a Prefer Luna for architecture planning.'   "$fixture/.agents/skills/agent-routing/SKILL.md"
+expect_failure 'Luna architecture rule'
+
+printf 'agent routing validator rejected all contradictory fixtures\n'

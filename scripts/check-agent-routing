@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository="${1:-$(git rev-parse --show-toplevel)}"
+policy="$repository/.agents/skills/agent-routing/SKILL.md"
+config="$repository/.codex/config.toml"
+agents="$repository/AGENTS.md"
+
+require_once() {
+  local file="$1"
+  local text="$2"
+  local count
+  count="$(rg --fixed-strings --count-matches -- "$text" "$file" || true)"
+  if [[ "$count" != 1 ]]; then
+    printf 'expected exactly one policy occurrence in %s, found %s: %s\n'       "$file" "$count" "$text" >&2
+    return 1
+  fi
+}
+
+config_value() {
+  local attribute="$1"
+  nix eval --impure --raw --expr \
+    "let config = builtins.fromTOML (builtins.readFile \"$config\"); in config.$attribute"
+}
+
+require_config() {
+  local attribute="$1"
+  local expected="$2"
+  local actual
+  actual="$(config_value "$attribute")"
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'unexpected .codex/config.toml value for %s: expected %s, found %s\n'       "$attribute" "$expected" "$actual" >&2
+    return 1
+  fi
+}
+
+for file in "$policy" "$config" "$agents"; do
+  if [[ ! -f "$file" ]]; then
+    printf 'missing agent-routing policy file: %s\n' "$file" >&2
+    exit 1
+  fi
+done
+
+# builtins.fromTOML rejects malformed TOML and duplicate keys. Reading values
+# from their effective tables prevents comments or misplaced keys from passing.
+require_config model gpt-5.6-sol
+require_config model_reasoning_effort low
+require_config plan_mode_model gpt-5.6-sol
+require_config plan_mode_reasoning_effort high
+require_config agents.default_subagent_model gpt-5.6-luna
+require_config agents.default_subagent_reasoning_effort max
+
+require_once "$agents" '.agents/skills/agent-routing/SKILL.md'
+require_once "$policy" 'Main-session orchestration | `gpt-5.6-sol` | `low`'
+require_once "$policy" 'Bounded, approved implementation | `gpt-5.6-luna` | `max`'
+require_once "$policy" 'Trivial exploration, inventories, typo fixes, mechanical edits | `gpt-5.6-luna` | `low`'
+require_once "$policy" 'Modest synthesis during otherwise trivial work | `gpt-5.6-luna` | `medium`'
+require_once "$policy" 'Architecture, planning, substantive implementation review, and non-trivial review corrections | `gpt-5.6-sol` | `high`'
+require_once "$policy" 'Exceptional architecture or planning with broad coupling, ambiguity, or competing designs | `gpt-5.6-sol` | `xhigh`'
+require_once "$policy" 'Demanding concurrency, recovery, EventCore ownership or contracts, transaction semantics, cross-cutting architecture, or conflicting evidence | `gpt-6-astra` | `high`'
+require_once "$policy" 'Terra is not a routine routing tier.'
+require_once "$policy" 'Escalate before implementation'
+require_once "$policy" 'independent review rejects implementation for a non-trivial reason'
+require_once "$policy" 'The reviewer must classify every returned change'
+require_once "$policy" 'Every delegated task states its selected model and reasoning effort'
+require_once "$policy" 'the clear contract or approved RED test;'
+require_once "$policy" 'explicit, non-overlapping file ownership;'
+require_once "$policy" 'the small expected implementation scope;'
+require_once "$policy" 'required verification and the evidence to return;'
+require_once "$policy" 'stop conditions for any risk boundary below.'
+require_once "$policy" 'supporting file, test, or command evidence;'
+require_once "$policy" 'whether each returned change is mechanical enough for Luna or requires'
+require_once "$policy" 'the reason for that classification.'
+
+normative_globs=(
+  --hidden
+  --glob '!.git/**'
+  --glob 'AGENTS.md'
+  --glob 'CLAUDE.md'
+  --glob 'GEMINI.md'
+  --glob 'SKILL.md'
+  --glob '*.toml'
+)
+
+contradictions="$(
+  rg -n -i "${normative_globs[@]}"     '((use|select|choose|prefer|route|default).{0,30}terra|terra.{0,30}(default|routine|preferred|inventor))'     "$repository"     | rg -v -F 'Terra is not a routine routing tier. Select Terra only'     || true
+)"
+if [[ -n "$contradictions" ]]; then
+  printf '%s\n' "$contradictions" >&2
+  printf 'contradictory Terra routing remains\n' >&2
+  exit 1
+fi
+
+contradictions="$(
+  rg -n -i "${normative_globs[@]}"     '((use|select|choose|prefer|route).{0,30}luna.{0,50}(architect|planning|substantive review|non-trivial review)|(architect|planning|substantive review|non-trivial review).{0,50}(use|select|choose|prefer|route).{0,30}luna)'     "$repository"     || true
+)"
+if [[ -n "$contradictions" ]]; then
+  printf '%s\n' "$contradictions" >&2
+  printf 'contradictory Luna routing for non-trivial work remains\n' >&2
+  exit 1
+fi
+
+printf 'agent routing policy and effective Codex defaults are internally consistent\n'
