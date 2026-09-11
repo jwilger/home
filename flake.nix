@@ -88,6 +88,20 @@
 
           touch "$out"
         '';
+        hyprland-catppuccin-borders = pkgs.runCommand "check-hyprland-catppuccin-borders" { } ''
+          hyprlandConfig=${
+            self.homeConfigurations."jwilger@jwilger-t14".activationPackage
+          }/home-files/.config/hypr/hyprland.lua
+
+          grep -Fq '["active_border"] = "rgb(cba6f7)"' "$hyprlandConfig"
+          grep -Fq '["inactive_border"] = "rgb(1e1e2e)"' "$hyprlandConfig"
+          grep -Fq '["border_active"] = "rgb(fab387)"' "$hyprlandConfig"
+          grep -Fq '["border_inactive"] = "rgb(1e1e2e)"' "$hyprlandConfig"
+          grep -Fq '["border_locked_active"] = "rgb(f38ba8)"' "$hyprlandConfig"
+          grep -Fq '["border_locked_inactive"] = "rgb(1e1e2e)"' "$hyprlandConfig"
+
+          touch "$out"
+        '';
         interface =
           assert self.homeModules.default == self.homeModules.jwilger;
           pkgs.emptyDirectory;

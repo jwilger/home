@@ -69,6 +69,27 @@ in
           layout = "scrolling";
         };
 
+        group = {
+          col = {
+            border_active = "rgb(fab387)";
+            border_inactive = "rgb(1e1e2e)";
+            border_locked_active = "rgb(f38ba8)";
+            border_locked_inactive = "rgb(1e1e2e)";
+          };
+          groupbar = {
+            col = {
+              active = "rgb(fab387)";
+              inactive = "rgb(1e1e2e)";
+              locked_active = "rgb(f38ba8)";
+              locked_inactive = "rgb(1e1e2e)";
+            };
+            text_color = "rgb(11111b)";
+            text_color_inactive = "rgb(cdd6f4)";
+            text_color_locked_active = "rgb(11111b)";
+            text_color_locked_inactive = "rgb(cdd6f4)";
+          };
+        };
+
         decoration = {
           rounding = 12;
           shadow = {
