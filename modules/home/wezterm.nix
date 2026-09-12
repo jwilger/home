@@ -7,7 +7,12 @@
 
     settings = {
       color_scheme = "Catppuccin Mocha";
-      font = lib.generators.mkLuaInline ''wezterm.font("JetBrainsMono Nerd Font Mono")'';
+      font = lib.generators.mkLuaInline ''
+        wezterm.font_with_fallback({
+          "JetBrainsMono Nerd Font Mono",
+          "DejaVu Sans",
+        })
+      '';
       font_size = 11.0;
       window_background_opacity = 0.85;
       window_decorations = "NONE";

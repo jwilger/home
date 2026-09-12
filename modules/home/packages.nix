@@ -102,6 +102,7 @@ in
         bubblewrap
         codeql
         cliphist # clipboard manager (Wayland)
+        dejavu_fonts
         dwt1-shell-color-scripts
         gcc
         gparted # partition manager

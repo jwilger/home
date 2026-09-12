@@ -153,7 +153,7 @@ enabled = [ "noctalia/screen_recorder", "noctalia/wallhaven" ]
 [shell]
 app_icon_colorize = true
 date_format = "%A, %x"
-font_family = "JetBrainsMono Nerd Font Mono"
+font_family = "DejaVu Sans"
 launch_apps_as_systemd_services = true
 password_style = "random"
 polkit_agent = true
