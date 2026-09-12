@@ -317,8 +317,8 @@ in
         (exec "XF86AudioPlay" "playerctl play-pause")
         (exec "XF86AudioNext" "playerctl next")
         (exec "XF86AudioPrev" "playerctl previous")
-        (exec "XF86MonBrightnessUp" "brightnessctl set +5%")
-        (exec "XF86MonBrightnessDown" "brightnessctl set 5%-")
+        (exec "XF86MonBrightnessUp" "noctalia msg brightness-up")
+        (exec "XF86MonBrightnessDown" "noctalia msg brightness-down")
         (exec "SUPER + D" "voice-dictation")
         (bind "SUPER + V" "hl.dsp.window.float()")
         (bind "SUPER + SHIFT + V" ''
