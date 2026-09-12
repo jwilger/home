@@ -241,6 +241,164 @@
                 fi
               done
             '';
+            recoveryOp = pkgs.writeShellScript "onepassword-recovery-test-op" ''
+              set -euo pipefail
+
+              count_file="$RECOVERY_TEST_ROOT/op-count"
+              count=0
+              if [[ -e "$count_file" ]]; then
+                count="$(<"$count_file")"
+              fi
+              count=$((count + 1))
+              printf '%s\n' "$count" >"$count_file"
+
+              if [[ "$RECOVERY_TEST_SCENARIO" == third-success && "$count" -eq 3 ]] \
+                || [[ "$RECOVERY_TEST_SCENARIO" == readiness-recovery && "$count" -eq 1 ]]; then
+                printf '%s' recovery-fixture-secret
+                exit 0
+              fi
+              exit 1
+            '';
+            recoveryHelper = pkgs.writeShellScript "onepassword-recovery-test-helper" ''
+              set -euo pipefail
+
+              if [[ "''${1-}" == --check-only ]]; then
+                check_count_file="$RECOVERY_TEST_ROOT/check-count"
+                check_count=0
+                if [[ -e "$check_count_file" ]]; then
+                  check_count="$(<"$check_count_file")"
+                fi
+                check_count=$((check_count + 1))
+                printf '%s\n' "$check_count" >"$check_count_file"
+                if [[ -e "$RECOVERY_TEST_ROOT/unlocked" ]]; then
+                  exit 0
+                fi
+                if [[ "$RECOVERY_TEST_SCENARIO" == deadline-rollover ]]; then
+                  exit 1
+                fi
+                if [[ "$RECOVERY_TEST_SCENARIO" == readiness-recovery && "$check_count" -lt 3 ]]; then
+                  exit 1
+                fi
+                exit 3
+              fi
+
+              secret=
+              IFS= read -r secret || true
+              if [[ "$secret" != recovery-fixture-secret ]]; then
+                exit 1
+              fi
+              touch "$RECOVERY_TEST_ROOT/unlocked"
+            '';
+            recoverySleep = pkgs.writeShellScript "onepassword-recovery-test-sleep" ''
+              set -euo pipefail
+              printf '%s\n' "$1" >>"$RECOVERY_TEST_ROOT/sleeps"
+            '';
+            recoveryNotify = pkgs.writeShellScript "onepassword-recovery-test-notify" ''
+              set -euo pipefail
+              printf 'notified\n' >>"$RECOVERY_TEST_ROOT/notifications"
+            '';
+            recoveryTest = pkgs.writeShellScript "onepassword-keyring-recovery-test" ''
+              set -euo pipefail
+
+              production_script="$1"
+              test_root="$TMPDIR/keyring-recovery"
+              test_script="$test_root/unlock-test"
+              mkdir -p "$test_root"
+
+              ${pkgs.gnused}/bin/sed \
+                -e 's|^op_bin=.*$|op_bin=${recoveryOp}|' \
+                -e '/^if \[\[ -x \/run\/wrappers\/bin\/op \]\]; then$/,/^fi$/d' \
+                -e 's|^keyring_helper=.*$|keyring_helper=${recoveryHelper}|' \
+                -e 's|^sleep_bin=.*$|sleep_bin=${recoverySleep}|' \
+                -e 's|^notify_bin=.*$|notify_bin=${recoveryNotify}|' \
+                "$production_script" >"$test_script"
+              chmod 700 "$test_script"
+
+              run_case() {
+                case_name="$1"
+                expected_status="$2"
+                case_root="$test_root/$case_name"
+                mkdir -p "$case_root"
+                export RECOVERY_TEST_ROOT="$case_root"
+                export RECOVERY_TEST_SCENARIO="$case_name"
+
+                set +e
+                "$test_script" >"$case_root/stdout" 2>"$case_root/stderr"
+                status=$?
+                set -e
+                test "$status" -eq "$expected_status"
+              }
+
+              mkdir -p "$test_root/already-unlocked"
+              touch "$test_root/already-unlocked/unlocked"
+              run_case already-unlocked 0
+              test ! -e "$test_root/already-unlocked/op-count"
+              test ! -e "$test_root/already-unlocked/sleeps"
+              test ! -e "$test_root/already-unlocked/notifications"
+
+              run_case readiness-recovery 0
+              test "$(<"$test_root/readiness-recovery/op-count")" -eq 1
+              printf '30\n2\n' >"$test_root/expected-readiness-sleeps"
+              cmp \
+                "$test_root/expected-readiness-sleeps" \
+                "$test_root/readiness-recovery/sleeps"
+              test ! -e "$test_root/readiness-recovery/notifications"
+
+              deadline_script="$test_root/unlock-deadline-test"
+              ${pkgs.gnused}/bin/sed \
+                '/readiness_remaining=.*readiness_deadline - SECONDS/c\          readiness_remaining=0' \
+                "$test_script" >"$deadline_script"
+              chmod 700 "$deadline_script"
+              export RECOVERY_TEST_ROOT="$test_root/deadline-rollover"
+              export RECOVERY_TEST_SCENARIO=deadline-rollover
+              mkdir -p "$RECOVERY_TEST_ROOT"
+              set +e
+              "$deadline_script" \
+                >"$RECOVERY_TEST_ROOT/stdout" 2>"$RECOVERY_TEST_ROOT/stderr"
+              deadline_status=$?
+              set -e
+              test "$deadline_status" -eq 1
+              test "$(<"$RECOVERY_TEST_ROOT/check-count")" -eq 1
+              test ! -e "$RECOVERY_TEST_ROOT/op-count"
+              grep -Fxq 30 "$RECOVERY_TEST_ROOT/sleeps"
+              test "$(wc -l <"$RECOVERY_TEST_ROOT/notifications")" -eq 1
+
+              run_case third-success 0
+              test "$(<"$test_root/third-success/op-count")" -eq 3
+              printf '30\n120\n480\n' >"$test_root/expected-sleeps"
+              cmp "$test_root/expected-sleeps" "$test_root/third-success/sleeps"
+              test ! -e "$test_root/third-success/notifications"
+              grep -Fq \
+                'gnome-keyring-unlock: phase=complete attempt=3 result=unlocked' \
+                "$test_root/third-success/stderr"
+
+              run_case exhausted 1
+              test "$(<"$test_root/exhausted/op-count")" -eq 3
+              cmp "$test_root/expected-sleeps" "$test_root/exhausted/sleeps"
+              test "$(wc -l <"$test_root/exhausted/notifications")" -eq 1
+              grep -Fq \
+                'gnome-keyring-unlock: phase=complete attempt=3 result=exhausted' \
+                "$test_root/exhausted/stderr"
+
+              if grep -R -Fq recovery-fixture-secret \
+                "$test_root/already-unlocked/stdout" \
+                "$test_root/already-unlocked/stderr" \
+                "$test_root/readiness-recovery/stdout" \
+                "$test_root/readiness-recovery/stderr" \
+                "$test_root/deadline-rollover/stdout" \
+                "$test_root/deadline-rollover/stderr" \
+                "$test_root/third-success/stdout" \
+                "$test_root/third-success/stderr" \
+                "$test_root/exhausted/stdout" \
+                "$test_root/exhausted/stderr" \
+                "$test_root/third-success/sleeps" \
+                "$test_root/exhausted/sleeps" \
+                "$test_root/exhausted/notifications"; then
+                exit 1
+              fi
+              ! grep -Fq 'systemctl' "$test_script"
+              ! grep -Fq 'restart' "$test_script"
+            '';
             testDbusDaemon = pkgs.writeShellScript "onepassword-test-dbus-daemon" ''
               args=()
               for arg in "$@"; do
@@ -267,6 +425,8 @@
                   onepasswordService="$homeFiles/.config/systemd/user/tenkr-onepassword.service"
                   onepasswordCliService="$homeFiles/.config/systemd/user/tenkr-onepassword-cli.service"
                   keyringService="$homeFiles/.config/systemd/user/tenkr-gnome-keyring-unlock.service"
+                  keyringLaunchService="$homeFiles/.config/systemd/user/tenkr-gnome-keyring-unlock-launch.service"
+                  keyringRetryService="$homeFiles/.config/systemd/user/tenkr-gnome-keyring-unlock-retry.service"
                   unlockScript="$(sed -n 's/^ExecStart=//p' "$keyringService")"
                   unlockHelper="$({ grep -oE '/nix/store/[a-z0-9]+-unlock-gnome-keyring-from-stdin-1/bin/unlock-gnome-keyring-from-stdin' "$unlockScript" || true; } | head -n 1)"
                   unlockSource="$(sed -n 's/^# Audited helper source: //p' "$unlockScript")"
@@ -280,12 +440,26 @@
                   grep -Fq 'OP_SOCK=%t/onepassword/op-daemon.sock' "$onepasswordCliService"
                   grep -Fq 'onepassword-cli-daemon' "$onepasswordCliService"
                   grep -Fq 'Wants=tenkr-onepassword-cli.service' "$keyringService"
+                  grep -Fq 'Wants=tenkr-onepassword.service' "$keyringService"
                   grep -Fq 'After=tenkr-onepassword-cli.service' "$keyringService"
+                  grep -Fq 'After=tenkr-onepassword.service' "$keyringService"
                   grep -Fq 'PartOf=graphical-session.target' "$keyringService"
-                  grep -Fq 'WantedBy=graphical-session.target' "$keyringService"
-                  grep -Fq 'StartLimitIntervalSec=600' "$keyringService"
-                  grep -Fq 'StartLimitBurst=2' "$keyringService"
+                  ! grep -Fq 'WantedBy=graphical-session.target' "$keyringService"
+                  ! grep -Fq 'StartLimit' "$keyringService"
+                  ! grep -Fq 'Restart=' "$keyringService"
                   grep -Fq 'LimitCORE=0' "$keyringService"
+                  grep -Fq 'Wants=tenkr-onepassword.service' "$keyringLaunchService"
+                  grep -Fq 'Wants=tenkr-onepassword-cli.service' "$keyringLaunchService"
+                  grep -Fq 'After=tenkr-onepassword.service' "$keyringLaunchService"
+                  grep -Fq 'After=tenkr-onepassword-cli.service' "$keyringLaunchService"
+                  grep -Fq 'PartOf=graphical-session.target' "$keyringLaunchService"
+                  grep -Fq 'WantedBy=graphical-session.target' "$keyringLaunchService"
+                  grep -Fq 'Type=oneshot' "$keyringLaunchService"
+                  grep -Fq 'RemainAfterExit=true' "$keyringLaunchService"
+                  grep -Fq 'systemctl --user start --no-block tenkr-gnome-keyring-unlock.service' "$keyringLaunchService"
+                  ! grep -Fq 'TimeoutStartSec=' "$keyringLaunchService"
+                  grep -Fq 'systemctl --user start --no-block tenkr-gnome-keyring-unlock.service' "$keyringRetryService"
+                  ! grep -Fq 'restart' "$keyringRetryService"
                   test -x "$unlockScript"
                   test -x "$unlockHelper"
                   test -f "$unlockSource"
@@ -330,28 +504,37 @@
 
                   dbus_call_timeout="$(sed -n 's/^# dbus_call_timeout=//p' "$unlockScript")"
                   readiness_timeout="$(sed -n 's/^readiness_timeout=//p' "$unlockScript")"
+                  initial_settle="$(sed -n 's/^initial_settle=//p' "$unlockScript")"
                   approval_timeout="$(sed -n 's/^approval_timeout=//p' "$unlockScript")"
+                  max_attempts="$(sed -n 's/^max_attempts=//p' "$unlockScript")"
                   post_read_dbus_calls="$(sed -n 's/^# post_read_dbus_calls=//p' "$unlockScript")"
                   kill_after="$(sed -n 's/^kill_after=//p' "$unlockScript")"
                   timeout_headroom="$(sed -n 's/^# timeout_headroom=//p' "$unlockScript")"
                   service_timeout="$(sed -n 's/^TimeoutStartSec=//p' "$keyringService")"
                   for timeout_value in \
                     "$dbus_call_timeout" "$readiness_timeout" "$approval_timeout" \
-                    "$post_read_dbus_calls" "$kill_after" "$timeout_headroom" \
-                    "$service_timeout"; do
+                    "$initial_settle" "$max_attempts" "$post_read_dbus_calls" \
+                    "$kill_after" "$timeout_headroom" "$service_timeout"; do
                     test -n "$timeout_value"
                   done
                   expected_service_timeout=$((
-                    readiness_timeout + approval_timeout
-                    + post_read_dbus_calls * dbus_call_timeout
-                    + kill_after + timeout_headroom
+                    initial_settle + 120 + 480
+                    + max_attempts * (
+                      readiness_timeout + approval_timeout
+                      + post_read_dbus_calls * dbus_call_timeout + kill_after
+                    )
+                    + timeout_headroom
                   ))
                   test "$approval_timeout" -ge 120
+                  test "$max_attempts" -eq 3
+                  grep -Fq 'backoffs=(120 480)' "$unlockScript"
                   test "$service_timeout" -eq "$expected_service_timeout"
 
               ${pkgs.dbus}/bin/dbus-run-session \
                 --dbus-daemon=${testDbusDaemon} \
                 -- ${semanticTest} "$unlockHelper"
+
+                  ${recoveryTest} "$unlockScript"
 
                   touch "$out"
             '';

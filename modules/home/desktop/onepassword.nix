@@ -5,15 +5,22 @@ let
   keyringPasswordReference = "op://Personal/gqwzhhx32czatrq4wckuqzzo5q/password";
   dbusCallTimeoutSec = 15;
   readinessTimeoutSec = 30;
+  initialSettleSec = 30;
   approvalTimeoutSec = 180;
+  retryBackoffSec = [
+    120
+    480
+  ];
+  maxReadAttempts = builtins.length retryBackoffSec + 1;
   postReadDbusCalls = 5;
   killAfterSec = 5;
-  timeoutHeadroomSec = 20;
+  timeoutHeadroomSec = 60;
   unlockServiceTimeoutSec =
-    readinessTimeoutSec
-    + approvalTimeoutSec
-    + postReadDbusCalls * dbusCallTimeoutSec
-    + killAfterSec
+    initialSettleSec
+    + lib.foldl' (total: delay: total + delay) 0 retryBackoffSec
+    +
+      maxReadAttempts
+      * (readinessTimeoutSec + approvalTimeoutSec + postReadDbusCalls * dbusCallTimeoutSec + killAfterSec)
     + timeoutHeadroomSec;
   onePasswordCliDaemon = pkgs.writeShellApplication {
     name = "onepassword-cli-daemon";
@@ -318,6 +325,7 @@ let
     runtimeInputs = with pkgs; [
       _1password-cli
       coreutils
+      libnotify
     ];
     text = ''
       set -euo pipefail
@@ -326,6 +334,9 @@ let
       if [[ -x /run/wrappers/bin/op ]]; then
         op_bin=/run/wrappers/bin/op
       fi
+      keyring_helper=${unlockGnomeKeyringFromStdin}/bin/unlock-gnome-keyring-from-stdin
+      sleep_bin=${pkgs.coreutils}/bin/sleep
+      notify_bin=${pkgs.libnotify}/bin/notify-send
 
       # ReadAlias, UnlockWithMasterPassword, and the final Locked property
       # check all run in the compiled helper against one unique bus owner.
@@ -333,47 +344,109 @@ let
       # dbus_call_timeout=${toString dbusCallTimeoutSec}
       # post_read_dbus_calls=${toString postReadDbusCalls}
       # timeout_headroom=${toString timeoutHeadroomSec}
+      dbus_call_timeout=${toString dbusCallTimeoutSec}
       readiness_timeout=${toString readinessTimeoutSec}
+      initial_settle=${toString initialSettleSec}
       approval_timeout=${toString approvalTimeoutSec}
       kill_after=${toString killAfterSec}
+      backoffs=(${lib.concatMapStringsSep " " toString retryBackoffSec})
+      max_attempts=${toString maxReadAttempts}
 
-      readiness_deadline=$((SECONDS + readiness_timeout))
-      check_status=1
-      while ((SECONDS < readiness_deadline)); do
-        readiness_remaining=$((readiness_deadline - SECONDS))
-        set +e
-        timeout --foreground --kill-after="''${kill_after}s" "$readiness_remaining" \
-          ${unlockGnomeKeyringFromStdin}/bin/unlock-gnome-keyring-from-stdin --check-only
-        check_status=$?
-        set -e
-        if ((check_status == 0)); then
-          exit 0
+      log_phase() {
+        printf 'gnome-keyring-unlock: phase=%s attempt=%s result=%s\n' \
+          "$1" "$2" "$3" >&2
+      }
+
+      check_keyring() {
+        check_timeout="''${1:-$dbus_call_timeout}"
+        if ((check_timeout <= 0)); then
+          return 1
         fi
-        if ((check_status == 3)); then
-          break
-        fi
-        sleep 2
-      done
+        timeout --foreground --kill-after="''${kill_after}s" "$check_timeout" \
+          "$keyring_helper" --check-only >/dev/null 2>&1
+      }
 
-      if ((check_status != 3)); then
-        echo "Could not unlock the login keyring." >&2
-        exit 1
-      fi
+      wait_for_keyring() {
+        readiness_deadline=$((SECONDS + readiness_timeout))
+        while ((SECONDS < readiness_deadline)); do
+          readiness_remaining=$((readiness_deadline - SECONDS))
+          if ((readiness_remaining <= 0)); then
+            break
+          fi
+          check_timeout="$dbus_call_timeout"
+          if ((readiness_remaining < check_timeout)); then
+            check_timeout="$readiness_remaining"
+          fi
+          check_status=0
+          check_keyring "$check_timeout" || check_status=$?
+          if ((check_status == 0 || check_status == 3)); then
+            return "$check_status"
+          fi
+          "$sleep_bin" 2
+        done
+        return 1
+      }
 
-      # Run one bounded authorization request. Killing short attempts and
-      # retrying them can dismiss a legitimate 1Password approval prompt.
-      set +e
-      timeout --foreground --kill-after="''${kill_after}s" "$approval_timeout" \
-        "$op_bin" read --no-newline \
-          --account '${personalAccount}' '${keyringPasswordReference}' 2>/dev/null \
-        | ${unlockGnomeKeyringFromStdin}/bin/unlock-gnome-keyring-from-stdin
-      pipeline_status=("''${PIPESTATUS[@]}")
-      set -e
-      if ((pipeline_status[1] == 0)); then
+      check_status=0
+      check_keyring || check_status=$?
+      if ((check_status == 0)); then
+        log_phase complete 0 already-unlocked
         exit 0
       fi
 
-      echo "Could not unlock the login keyring." >&2
+      log_phase settle 0 waiting
+      "$sleep_bin" "$initial_settle"
+
+      terminal_attempt="$max_attempts"
+      terminal_result=exhausted
+      for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+        check_status=0
+        wait_for_keyring || check_status=$?
+        if ((check_status == 0)); then
+          log_phase complete "$attempt" already-unlocked
+          exit 0
+        fi
+        if ((check_status != 3)); then
+          log_phase keyring-readiness "$attempt" unavailable
+          terminal_attempt="$attempt"
+          terminal_result=unavailable
+          break
+        fi
+
+        # Each request gets one long authorization window. The retry budget is
+        # internal so systemd cannot turn failures into an unbounded prompt
+        # loop. 1Password errors are intentionally treated as opaque.
+        log_phase read "$attempt" starting
+        set +e
+        timeout --foreground --kill-after="''${kill_after}s" "$approval_timeout" \
+          "$op_bin" read --no-newline \
+            --account '${personalAccount}' '${keyringPasswordReference}' 2>/dev/null \
+          | "$keyring_helper" 2>/dev/null
+        pipeline_status=("''${PIPESTATUS[@]}")
+        set -e
+
+        if ((pipeline_status[0] == 0 && pipeline_status[1] == 0)); then
+          check_status=0
+          check_keyring || check_status=$?
+          if ((check_status == 0)); then
+            log_phase complete "$attempt" unlocked
+            exit 0
+          fi
+        fi
+        log_phase read "$attempt" failed
+
+        if ((attempt < max_attempts)); then
+          backoff="''${backoffs[attempt - 1]}"
+          log_phase backoff "$attempt" waiting
+          "$sleep_bin" "$backoff"
+        fi
+      done
+
+      log_phase complete "$terminal_attempt" "$terminal_result"
+      "$notify_bin" --app-name="GNOME Keyring" \
+        "GNOME login keyring remains locked" \
+        "Unlock 1Password, then start tenkr-gnome-keyring-unlock-retry.service." \
+        >/dev/null 2>&1 || true
       exit 1
     '';
   };
@@ -423,11 +496,15 @@ lib.mkIf isLinux {
     tenkr-gnome-keyring-unlock = {
       Unit = {
         Description = "Unlock GNOME Keyring using a password stored in 1Password";
-        Wants = [ "tenkr-onepassword-cli.service" ];
-        After = [ "tenkr-onepassword-cli.service" ];
+        Wants = [
+          "tenkr-onepassword.service"
+          "tenkr-onepassword-cli.service"
+        ];
+        After = [
+          "tenkr-onepassword.service"
+          "tenkr-onepassword-cli.service"
+        ];
         PartOf = [ "graphical-session.target" ];
-        StartLimitIntervalSec = 600;
-        StartLimitBurst = 2;
       };
       Service = {
         Environment = [
@@ -436,12 +513,38 @@ lib.mkIf isLinux {
         ];
         Type = "oneshot";
         ExecStart = "${unlockGnomeKeyring}/bin/unlock-gnome-keyring-from-1password";
-        Restart = "on-failure";
-        RestartSec = 15;
         TimeoutStartSec = unlockServiceTimeoutSec;
         LimitCORE = 0;
       };
+    };
+
+    tenkr-gnome-keyring-unlock-launch = {
+      Unit = {
+        Description = "Launch GNOME Keyring recovery for this graphical session";
+        Wants = [
+          "tenkr-onepassword.service"
+          "tenkr-onepassword-cli.service"
+        ];
+        After = [
+          "tenkr-onepassword.service"
+          "tenkr-onepassword-cli.service"
+        ];
+        PartOf = [ "graphical-session.target" ];
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/systemctl --user start --no-block tenkr-gnome-keyring-unlock.service";
+        RemainAfterExit = true;
+      };
       Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    tenkr-gnome-keyring-unlock-retry = {
+      Unit.Description = "Retry unlocking GNOME Keyring from 1Password";
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/systemctl --user start --no-block tenkr-gnome-keyring-unlock.service";
+      };
     };
   };
 
