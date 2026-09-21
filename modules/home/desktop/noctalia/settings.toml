@@ -1,4 +1,17 @@
-config_version = 13
+config_version = 14
+
+[calendar]
+enabled = true
+
+    [calendar.account.10kr_google]
+    color = "primary"
+    name = "10kr Calendar"
+    type = "google"
+
+    [calendar.account.personal_google]
+    color = "tertiary"
+    name = "Personal Calendar"
+    type = "google"
 
 [hooks]
 session_unlocked = "restore-window-focus"
@@ -6,7 +19,12 @@ session_unlocked = "restore-window-focus"
 [lockscreen_widgets]
 enabled = false
 schema_version = 2
-widget_order = [ "lockscreen-login-box@FALLBACK", "lockscreen-login-box@Virtual-1", "lockscreen-login-box@DP-3" ]
+widget_order = [
+    "lockscreen-login-box@eDP-1",
+    "lockscreen-login-box@FALLBACK",
+    "lockscreen-login-box@Virtual-1",
+    "lockscreen-login-box@DP-3"
+]
 
     [lockscreen_widgets.grid]
     cell_size = 16
@@ -94,15 +112,49 @@ widget_order = [ "lockscreen-login-box@FALLBACK", "lockscreen-login-box@Virtual-
         show_unlock_hint = true
         show_weather = true
 
+    [lockscreen_widgets.widget."lockscreen-login-box@eDP-1"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 720.0
+    cy = 718.0
+    output = "eDP-1"
+    placement_height = 900.0
+    placement_width = 1440.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@eDP-1".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+[notification]
+history_retention_hours = 24
+
 [plugin_settings."noctalia/screen_recorder"]
 audio_source = "both"
 restore_portal = true
 
 [plugins]
-enabled = [ "noctalia/wallhaven", "noctalia/timer", "noctalia/screen_recorder" ]
+enabled = [ "noctalia/timer", "noctalia/screen_recorder" ]
+
+[shell.screen_corners]
+enabled = true
 
 [theme.templates]
 builtin_ids = [ "btop", "gtk3", "gtk4", "helix", "hyprland", "qt", "wezterm" ]
+community_ids = []
 
 [wallpaper.default]
 path = "~/.local/share/wallpapers/wallpaper.png"
@@ -112,6 +164,9 @@ path = "~/.local/share/wallpapers/wallpaper.png"
 
 [wallpaper.monitors.DP-3]
 path = "~/.local/share/wallpapers/wallpaper.png"
+
+[weather]
+unit = "imperial"
 
 [widget.control-center]
 custom_image = ""
