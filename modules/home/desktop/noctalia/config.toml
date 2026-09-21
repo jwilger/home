@@ -85,6 +85,10 @@ pre_action_fade_seconds = 5.0
     resume_command = "noctalia:dpms-on"
     timeout = 360
 
+[keybinds]
+down = [ "down", "ctrl+n" ]
+up = [ "up", "ctrl+p" ]
+
 [location]
 address = "Forest Grove, OR, USA"
 auto_locate = false
