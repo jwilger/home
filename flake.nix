@@ -74,6 +74,44 @@
       checks.${system} = {
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
+        hindsight-integration = pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; } ''
+          for profile in gregor jwilger-t14; do
+            homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
+            if [ "$profile" = jwilger-t14 ]; then
+              homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
+            fi
+
+            jq -e '
+              .serverMode == "self-hosted" and
+              .harness == "codex" and
+              .apiUrl == "http://127.0.0.1:9077" and
+              .bankIdTemplate == "coding-agent::{gitProject}" and
+              .retainSessions == true and
+              .autoReflect == true and
+              .gitIngest == "message" and
+              .autoUpdate == true
+            ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
+            jq -e '.serverMode == "daemon" and .apiPort == 9077' \
+              "$homeFiles/.hindsight/daemon.json" >/dev/null
+            grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
+              "$homeFiles/.hindsight/openai.env"
+            grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
+              "$homeFiles/.hindsight/openai.env"
+            grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
+              "$homeFiles/.hindsight/openai.env"
+
+            test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
+            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
+            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
+            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
+            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
+            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
+            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
+            test ! -e "$homeFiles/.codex/config.toml"
+            test ! -e "$homeFiles/.codex/hooks.json"
+          done
+          touch "$out"
+        '';
         noctalia-startup-order = pkgs.runCommand "check-noctalia-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"

@@ -42,6 +42,7 @@ in
     ./environment.nix
     ./git.nix
     ./helix
+    ./hindsight.nix
     ./lazygit.nix
     ./lanyard.nix
     ./packages.nix
