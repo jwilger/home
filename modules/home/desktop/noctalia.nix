@@ -14,7 +14,6 @@ let
   '';
   wallpaperPath = "${config.home.homeDirectory}/.local/share/wallpapers/wallpaper.png";
   lockScreen = pkgs.writeShellScript "lock-screen" ''
-    ${pkgs._1password-gui}/bin/1password --lock &
     ${noctaliaPkg}/bin/noctalia msg session lock
   '';
   restoreWindowFocus = pkgs.writeShellApplication {
