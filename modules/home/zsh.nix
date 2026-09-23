@@ -51,17 +51,6 @@
         # Shell-based title setting is disabled as zellij intercepts OSC sequences.
         # See: https://github.com/zellij-org/zellij/pull/3898 for session-switch title fix.
       '')
-      (lib.mkOrder 1100 ''
-        # Interactive Codex uses its own configuration and shared background
-        # server. The desktop app keeps the populated ~/.codex/config.toml.
-        codex() {
-          CODEX_HOME="$HOME/.codex/cli-home" command codex "$@"
-        }
-
-        codex-ai() {
-          AI_GIT_PROFILE=bot codex "$@"
-        }
-      '')
     ];
 
     shellAliases = {
