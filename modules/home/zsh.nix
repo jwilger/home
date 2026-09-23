@@ -51,6 +51,37 @@
         # Shell-based title setting is disabled as zellij intercepts OSC sequences.
         # See: https://github.com/zellij-org/zellij/pull/3898 for session-switch title fix.
       '')
+      (lib.mkOrder 1100 ''
+        # Keep the desktop app's shared Codex configuration intact. Interactive
+        # CLI sessions use a profile that exposes only Hindsight by default.
+        codex() {
+          case "$1" in
+            ""|exec|review|resume|queue|archive|delete|unarchive|fork|mcp|sandbox)
+              command codex --profile lean "$@"
+              ;;
+            debug)
+              if [[ "$2" == prompt-input ]]; then
+                command codex --profile lean "$@"
+              else
+                command codex "$@"
+              fi
+              ;;
+            -h|--help|-V|--version)
+              command codex "$@"
+              ;;
+            -*)
+              command codex --profile lean "$@"
+              ;;
+            *)
+              command codex "$@"
+              ;;
+          esac
+        }
+
+        codex-ai() {
+          AI_GIT_PROFILE=bot codex "$@"
+        }
+      '')
     ];
 
     shellAliases = {
