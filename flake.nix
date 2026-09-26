@@ -128,6 +128,7 @@
             grep -Fq 'on_recording_start = true' "$config"
             grep -Fq 'on_recording_stop = true' "$config"
             grep -Fq 'PartOf=graphical-session.target' "$service"
+            grep -Fq 'WantedBy=graphical-session.target' "$service"
             grep -Fq 'SCROLL_LOCK' "$hyprland"
             grep -Fq 'voxtype record toggle' "$hyprland"
             grep -Fq 'systemctl --user start voxtype.service' "$hyprland"

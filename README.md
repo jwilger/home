@@ -30,7 +30,10 @@ Hyprland starts its user service on login. Press **Scroll Lock** to begin record
 and again to transcribe into the focused window; Noctalia shows start/stop
 notifications and its microphone privacy indicator. Voxtype's built-in evdev
 hotkey is disabled, so no `input` group membership is needed. Check
-`systemctl --user status voxtype` if dictation does not start.
+`systemctl --user status voxtype` if dictation does not start. New Lua
+keybindings take effect after logging out and back in; `hyprctl reload`
+does not re-register them. To start the daemon without logging out after a
+Home Manager switch, run `systemctl --user start voxtype.service`.
 
 ## Hindsight memory
 

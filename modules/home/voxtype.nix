@@ -32,8 +32,8 @@ lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
     on_transcription = false
   '';
 
-  # Started by Hyprland so direct and UWSM sessions behave the same. UWSM
-  # stops the service with graphical-session.target at logout.
+  # UWSM starts this with the graphical session; Hyprland also starts it
+  # explicitly for direct sessions without UWSM.
   systemd.user.services.voxtype = {
     Unit = {
       Description = "Voxtype speech-to-text daemon";
@@ -45,5 +45,6 @@ lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
       Restart = "on-failure";
       RestartSec = 3;
     };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 }
