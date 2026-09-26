@@ -22,6 +22,16 @@ copies into writable user configuration. After intentional UI changes, run
 repository and leaves the Git diff uncommitted for inspection. Generated state
 and plugin data are never captured.
 
+## Voice dictation
+
+Voxtype replaces the old `voice-dictation` script. After activation, run
+`voxtype setup --download` once to fetch the local `base.en` Whisper model.
+Hyprland starts its user service on login. Press **Scroll Lock** to begin recording
+and again to transcribe into the focused window; Noctalia shows start/stop
+notifications and its microphone privacy indicator. Voxtype's built-in evdev
+hotkey is disabled, so no `input` group membership is needed. Check
+`systemctl --user status voxtype` if dictation does not start.
+
 ## Hindsight memory
 
 Home Manager configures a local Hindsight daemon and installs its Codex hooks,

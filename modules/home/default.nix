@@ -50,7 +50,7 @@ in
     ./starship.nix
     ./theme.nix
     ./tmux.nix
-    ./voice-dictation.nix
+    ./voxtype.nix
     ./wezterm.nix
     ./yazi
     ./zellij

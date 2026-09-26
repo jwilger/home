@@ -359,7 +359,8 @@ in
         (exec "XF86AudioPrev" "playerctl previous")
         (exec "XF86MonBrightnessUp" "noctalia msg brightness-up")
         (exec "XF86MonBrightnessDown" "noctalia msg brightness-down")
-        (exec "SUPER + D" "voice-dictation")
+        # Press Scroll Lock again to stop and transcribe.
+        (exec "SCROLL_LOCK" "voxtype record toggle")
         (bind "SUPER + V" "hl.dsp.window.float()")
         (bind "SUPER + SHIFT + V" ''
           function()
@@ -394,6 +395,7 @@ in
       -- app and its CLI integration to become ready.
       hl.on("hyprland.start", function()
         hl.exec_cmd("noctalia --daemon")
+        hl.exec_cmd("systemctl --user start voxtype.service")
       end)
     '';
   };

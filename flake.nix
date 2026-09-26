@@ -112,6 +112,28 @@
           done
           touch "$out"
         '';
+        voxtype-integration = pkgs.runCommand "check-voxtype-integration" { } ''
+          for profile in gregor jwilger-t14; do
+            homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
+            if [ "$profile" = jwilger-t14 ]; then
+              homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
+            fi
+            config="$homeFiles/.config/voxtype/config.toml"
+            service="$homeFiles/.config/systemd/user/voxtype.service"
+            hyprland="$homeFiles/.config/hypr/hyprland.lua"
+            test -f "$config"
+            test -f "$service"
+            grep -Fq 'enabled = false' "$config"
+            grep -Fq 'on_recording_start = true' "$config"
+            grep -Fq 'on_recording_stop = true' "$config"
+            grep -Fq 'PartOf=graphical-session.target' "$service"
+            grep -Fq 'SCROLL_LOCK' "$hyprland"
+            grep -Fq 'voxtype record toggle' "$hyprland"
+            grep -Fq 'systemctl --user start voxtype.service' "$hyprland"
+            test ! -e "$homeFiles/.local/bin/voice-dictation"
+          done
+          touch "$out"
+        '';
         noctalia-startup-order = pkgs.runCommand "check-noctalia-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"
