@@ -123,6 +123,7 @@
             hyprland="$homeFiles/.config/hypr/hyprland.lua"
             test -f "$config"
             test -f "$service"
+            ${pkgs.voxtype}/bin/voxtype --config "$config" config >/dev/null
             grep -Fq 'enabled = false' "$config"
             grep -Fq 'on_recording_start = true' "$config"
             grep -Fq 'on_recording_stop = true' "$config"

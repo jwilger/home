@@ -13,6 +13,11 @@ lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
     [hotkey]
     enabled = false
 
+    [audio]
+    device = "default"
+    sample_rate = 16000
+    max_duration_secs = 60
+
     [whisper]
     model = "base.en"
     language = "en"
