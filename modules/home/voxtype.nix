@@ -30,6 +30,11 @@ lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
     on_recording_start = true
     on_recording_stop = true
     on_transcription = false
+
+    # No OSD frontend is included with the nixpkgs package. Noctalia handles
+    # recording feedback via notifications and its microphone privacy indicator.
+    [osd]
+    enabled = false
   '';
 
   # UWSM starts this with the graphical session; Hyprland also starts it

@@ -127,6 +127,7 @@
             grep -Fq 'enabled = false' "$config"
             grep -Fq 'on_recording_start = true' "$config"
             grep -Fq 'on_recording_stop = true' "$config"
+            grep -Fxq 'enabled = false' <(grep -A 1 '^\[osd\]$' "$config" | tail -n 1)
             grep -Fq 'PartOf=graphical-session.target' "$service"
             grep -Fq 'WantedBy=graphical-session.target' "$service"
             grep -Fq 'SCROLL_LOCK' "$hyprland"
