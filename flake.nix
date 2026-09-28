@@ -91,20 +91,32 @@
               .gitIngest == "message" and
               .autoUpdate == true
             ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
-            jq -e '.serverMode == "daemon" and .apiPort == 9077' \
-              "$homeFiles/.hindsight/daemon.json" >/dev/null
-            grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
-              "$homeFiles/.hindsight/openai.env"
-
-            test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
+            if [ "$profile" = jwilger-t14 ]; then
+              # nixos-config's Foundry module runs Hindsight and pi here.
+              grep -Fq 'HINDSIGHT_API_LLM_API_KEY="op://' "$homeFiles/.config/foundry/hindsight.env"
+              grep -Fq 'OP_ACCOUNT=' "$homeFiles/.config/systemd/user/foundry-hindsight.service.d/1password.conf"
+              for superseded in .hindsight/daemon.json .hindsight/openai.env .hindsight/foundry-pi.json \
+                  .config/systemd/user/hindsight-postgres.service \
+                  .config/systemd/user/hindsight-daemon-start.service \
+                  .config/systemd/user/hindsight-daemon-start.timer; do
+                test ! -e "$homeFiles/$superseded"
+              done
+              grep -Fq 'foundry-hindsight.service' "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
+            else
+              jq -e '.serverMode == "daemon" and .apiPort == 9077' \
+                "$homeFiles/.hindsight/daemon.json" >/dev/null
+              grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
+                "$homeFiles/.hindsight/openai.env"
+              grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
+                "$homeFiles/.hindsight/openai.env"
+              grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
+                "$homeFiles/.hindsight/openai.env"
+              test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
+              test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
+              test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
+            fi
             test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
             test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
             test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
             test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
             test ! -e "$homeFiles/.codex/config.toml"

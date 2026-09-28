@@ -5,6 +5,12 @@ let
   codingAgentRuntime = "${hindsightDirectory}/coding-agents/dist";
   credentialEnv = "${hindsightDirectory}/openai.env";
   daemonConfig = "${hindsightDirectory}/daemon.json";
+  # On jwilger-t14 the 10kr nixos-config Foundry module runs Hindsight (the
+  # same PostgreSQL data directory, port 5436 and API port 9077) and installs
+  # `pi` with Foundry. This module then only keeps the Codex integration.
+  fleet = config.jwilger.hostProfile == "jwilger-t14";
+  onePasswordAccount = "MRECLJED3JFMFCCB6ZS3D5AIZU";
+  credentialReference = "op://Personal/Hindsight/OpenAI API key";
   codingAgentBaseConfig = {
     serverMode = "self-hosted";
     harness = "codex";
@@ -147,7 +153,7 @@ let
       fi
 
       export HINDSIGHT_CONFIG=${lib.escapeShellArg daemonConfig}
-      exec "$op_bin" run --account MRECLJED3JFMFCCB6ZS3D5AIZU \
+      exec "$op_bin" run --account ${onePasswordAccount} \
         --env-file=${lib.escapeShellArg credentialEnv} -- \
         ${lib.getExe launchDaemon}
     '';
@@ -245,11 +251,84 @@ let
     '';
   };
 in
+lib.mkMerge [
 {
-  home.packages = [ foundryPi ];
-
   # Existing provider and non-Foundry bank behavior remain unchanged.
   home.file.".hindsight/coding-agent.json".text = builtins.toJSON codingAgentConfig;
+
+  systemd.user.services = {
+    hindsight-codex-install = {
+      Unit = {
+        Description = "Install and reconcile Hindsight Codex hooks and MCP";
+        Wants = [ "codex-cli-install.service" ];
+        After = [ "codex-cli-install.service" ];
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = lib.getExe installCodex;
+        TimeoutStartSec = "10min";
+        Restart = "on-failure";
+        RestartSec = "30min";
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
+    hindsight-codex-history-import = {
+      Unit = {
+        Description = "Import historical Codex sessions into Hindsight";
+        After = [ "hindsight-codex-install.service" ]
+          ++ (if fleet then [ "foundry-hindsight.service" ] else [ "hindsight-daemon-start.service" ]);
+        ConditionPathExists = "!%h/.local/state/hindsight/codex-history-imported-v2";
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = lib.getExe importCodex;
+        TimeoutStartSec = "3h";
+      };
+    };
+  };
+
+  systemd.user.timers = {
+    hindsight-codex-install = {
+      Unit.Description = "Reconcile Hindsight Codex hooks and MCP weekly";
+      Timer = {
+        OnCalendar = "weekly";
+        Persistent = true;
+        RandomizedDelaySec = "1d";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
+    hindsight-codex-history-import = {
+      Unit.Description = "Import historical Codex sessions after Hindsight is ready";
+      Timer = {
+        OnStartupSec = "15min";
+        OnUnitInactiveSec = "1h";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
+  };
+}
+
+(lib.mkIf fleet {
+  # Keys for the fleet Hindsight server (resolved by `op run` at start).
+  home.file.".config/foundry/hindsight.env".text = ''
+    HINDSIGHT_API_LLM_API_KEY="${credentialReference}"
+    HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="${credentialReference}"
+  '';
+  # Resolve those references with this account through the desktop app's
+  # CLI daemon, as the rest of this configuration does.
+  xdg.configFile."systemd/user/foundry-hindsight.service.d/1password.conf".text = ''
+    [Unit]
+    Wants=tenkr-onepassword.service tenkr-onepassword-cli.service
+    After=tenkr-onepassword.service tenkr-onepassword-cli.service
+
+    [Service]
+    Environment=OP_ACCOUNT=${onePasswordAccount}
+    Environment=OP_SOCK=%t/onepassword/op-daemon.sock
+  '';
+})
+
+(lib.mkIf (!fleet) {
+  home.packages = [ foundryPi ];
   # Pi selects this immutable same-daemon copy through pi-foundry. The pinned
   # Foundry plugin refuses per-bank routing maps at launch, so use the global
   # settings with the Foundry-only safety defaults at top level instead.
@@ -268,9 +347,9 @@ in
   # only for the daemon-start process and its child.
   home.file.".hindsight/openai.env".text = ''
     HINDSIGHT_API_LLM_PROVIDER=openai
-    HINDSIGHT_API_LLM_API_KEY="op://Personal/Hindsight/OpenAI API key"
+    HINDSIGHT_API_LLM_API_KEY="${credentialReference}"
     HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai
-    HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="op://Personal/Hindsight/OpenAI API key"
+    HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="${credentialReference}"
     HINDSIGHT_API_RERANKER_PROVIDER=rrf
     HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://${config.home.username}@/hindsight?host=${postgresSocket}&port=${postgresPort}"
   '';
@@ -289,22 +368,6 @@ in
       };
       Install.WantedBy = [ "default.target" ];
     };
-    hindsight-codex-install = {
-      Unit = {
-        Description = "Install and reconcile Hindsight Codex hooks and MCP";
-        Wants = [ "codex-cli-install.service" ];
-        After = [ "codex-cli-install.service" ];
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = lib.getExe installCodex;
-        TimeoutStartSec = "10min";
-        Restart = "on-failure";
-        RestartSec = "30min";
-      };
-      Install.WantedBy = [ "default.target" ];
-    };
-
     hindsight-daemon-start = {
       Unit = {
         Description = "Start the local Hindsight memory daemon";
@@ -333,46 +396,16 @@ in
         LimitCORE = 0;
       };
     };
-    hindsight-codex-history-import = {
-      Unit = {
-        Description = "Import historical Codex sessions into Hindsight";
-        After = [ "hindsight-codex-install.service" "hindsight-daemon-start.service" ];
-        ConditionPathExists = "!%h/.local/state/hindsight/codex-history-imported-v2";
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = lib.getExe importCodex;
-        TimeoutStartSec = "3h";
-      };
-    };
   };
 
-  systemd.user.timers = {
-    hindsight-codex-install = {
-      Unit.Description = "Reconcile Hindsight Codex hooks and MCP weekly";
-      Timer = {
-        OnCalendar = "weekly";
-        Persistent = true;
-        RandomizedDelaySec = "1d";
-      };
-      Install.WantedBy = [ "timers.target" ];
+  systemd.user.timers.hindsight-daemon-start = {
+    Unit.Description = "Keep the local Hindsight daemon available";
+    Timer = {
+      OnStartupSec = "1min";
+      OnUnitActiveSec = "5min";
+      OnUnitInactiveSec = "5min";
     };
-    hindsight-daemon-start = {
-      Unit.Description = "Keep the local Hindsight daemon available";
-      Timer = {
-        OnStartupSec = "1min";
-        OnUnitActiveSec = "5min";
-        OnUnitInactiveSec = "5min";
-      };
-      Install.WantedBy = [ "timers.target" ];
-    };
-    hindsight-codex-history-import = {
-      Unit.Description = "Import historical Codex sessions after Hindsight is ready";
-      Timer = {
-        OnStartupSec = "15min";
-        OnUnitInactiveSec = "1h";
-      };
-      Install.WantedBy = [ "timers.target" ];
-    };
+    Install.WantedBy = [ "timers.target" ];
   };
-}
+})
+]
