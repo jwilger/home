@@ -5,28 +5,6 @@ let
   codingAgentRuntime = "${hindsightDirectory}/coding-agents/dist";
   credentialEnv = "${hindsightDirectory}/openai.env";
   daemonConfig = "${hindsightDirectory}/daemon.json";
-  codingAgentBaseConfig = {
-    serverMode = "self-hosted";
-    harness = "codex";
-    apiUrl = "http://127.0.0.1:9077";
-    bankIdTemplate = "coding-agent::{gitProject}";
-    resolveWorktrees = true;
-    optInOnly = false;
-    retainSessions = true;
-    autoReflect = true;
-    gitIngest = "message";
-    autoUpdate = true;
-  };
-  # Other repositories retain their existing memory behavior. All harnesses
-  # resolving the Foundry bank must stay Git-message-only, not just Pi.
-  codingAgentConfig = codingAgentBaseConfig // {
-    banks."coding-agent::10kr-00001-foundry" = {
-      codebaseSurvey = false;
-      retainSessions = false;
-      gitIngest = "message";
-      autoUpdate = false;
-    };
-  };
   postgres = pkgs.postgresql_18.withPackages (extensions: [ extensions.pgvector ]);
   postgresDirectory = "${homeDirectory}/.local/share/hindsight/postgres";
   postgresSocket = "${postgresDirectory}/socket";
@@ -198,14 +176,6 @@ let
       }
       trap cleanup_import EXIT
       for root in "''${!roots[@]}"; do
-        # Foundry's bank is explicitly Git-message-only; even if the old
-        # import marker is removed, never ingest its Codex chat history.
-        if common_dir="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
-          if [[ "$(basename "$(dirname "$common_dir")")" == 10kr-00001-foundry ]]; then
-            echo "Skipping Git-message-only Foundry bank"
-            continue
-          fi
-        fi
         echo "Importing Codex history for $root"
         if ! (
           cd "$root"
@@ -226,38 +196,20 @@ let
       touch "$state_dir/codex-history-imported-v2"
     '';
   };
-  foundryPi = pkgs.writeShellApplication {
-    name = "pi-foundry";
-    runtimeInputs = [ pkgs.coreutils pkgs.gnugrep ];
-    text = ''
-      # Foundry's pinned wrapper refuses any unreviewed ambient memory overlay.
-      if env | grep -q '^HINDSIGHT_'; then
-        echo "Unset ambient HINDSIGHT_* overrides before launching Foundry." >&2
-        exit 1
-      fi
-      config_file="$HOME/.hindsight/foundry-pi.json"
-      if [[ ! -L "$config_file" || "$(realpath -e "$config_file")" != /nix/store/* ]]; then
-        echo "Apply the reviewed Home Manager Foundry profile first." >&2
-        exit 1
-      fi
-      export HINDSIGHT_CONFIG="$config_file"
-      exec pi "$@"
-    '';
-  };
 in
 {
-  home.packages = [ foundryPi ];
-
-  # Existing provider and non-Foundry bank behavior remain unchanged.
-  home.file.".hindsight/coding-agent.json".text = builtins.toJSON codingAgentConfig;
-  # Pi selects this immutable same-daemon copy through pi-foundry. The pinned
-  # Foundry plugin refuses per-bank routing maps at launch, so use the global
-  # settings with the Foundry-only safety defaults at top level instead.
-  home.file.".hindsight/foundry-pi.json".text = builtins.toJSON (codingAgentBaseConfig // {
-    codebaseSurvey = false;
-    retainSessions = false;
-    autoUpdate = false;
-  });
+  home.file.".hindsight/coding-agent.json".text = builtins.toJSON {
+    serverMode = "self-hosted";
+    harness = "codex";
+    apiUrl = "http://127.0.0.1:9077";
+    bankIdTemplate = "coding-agent::{gitProject}";
+    resolveWorktrees = true;
+    optInOnly = false;
+    retainSessions = true;
+    autoReflect = true;
+    gitIngest = "message";
+    autoUpdate = true;
+  };
 
   home.file.".hindsight/daemon.json".text = builtins.toJSON {
     serverMode = "daemon";
