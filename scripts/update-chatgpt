@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Update the ChatGPT version and SRI hash from one validated upstream deb."""
+
+import argparse
+import base64
+import hashlib
+import pathlib
+import re
+import subprocess
+import tempfile
+
+
+def update(deb, module):
+    def field(name):
+        return subprocess.check_output(
+            ["dpkg-deb", "--field", str(deb), name], text=True
+        ).strip()
+
+    if field("Package") != "chatgpt" or field("Architecture") != "amd64":
+        raise ValueError("Expected the ChatGPT amd64 Debian package")
+    version = field("Version")
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
+        raise ValueError(f"Unexpected version: {version!r}")
+    with deb.open("rb") as source:
+        digest = hashlib.file_digest(source, "sha256").digest()
+    sri = "sha256-" + base64.b64encode(digest).decode()
+    original = module.read_text()
+    updated, versions = re.subn(
+        r'(?m)^(    version = ")[^"]+(";)$',
+        lambda match: match[1] + version + match[2], original,
+    )
+    updated, hashes = re.subn(
+        r'(?m)^(      hash = ")[^"]+(";)$',
+        lambda match: match[1] + sri + match[2], updated,
+    )
+    if versions != 1 or hashes != 1:
+        raise ValueError("Expected exactly one ChatGPT version and source hash")
+    if updated != original:
+        module.write_text(updated)
+        print(f"Updated ChatGPT to {version} ({sri})")
+    else:
+        print(f"ChatGPT {version} is already current")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--deb", type=pathlib.Path, help="Use an existing download")
+    parser.add_argument(
+        "--module", type=pathlib.Path,
+        default=pathlib.Path(__file__).resolve().parents[1]
+        / "modules/home/desktop/chatgpt.nix",
+    )
+    args = parser.parse_args()
+    if args.deb:
+        update(args.deb, args.module)
+        return
+    with tempfile.TemporaryDirectory(prefix="chatgpt-update-") as directory:
+        deb = pathlib.Path(directory) / "chatgpt_amd64.deb"
+        subprocess.run([
+            "curl", "--fail", "--location", "--retry", "3",
+            "--connect-timeout", "30", "--max-time", "600",
+            "--output", str(deb),
+            "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb",
+        ], check=True)
+        update(deb, args.module)
+
+
+if __name__ == "__main__":
+    main()

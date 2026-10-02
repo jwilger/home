@@ -22,6 +22,21 @@ copies into writable user configuration. After intentional UI changes, run
 repository and leaves the Git diff uncommitted for inspection. Generated state
 and plugin data are never captured.
 
+## ChatGPT desktop updates
+
+The `Update ChatGPT desktop` GitHub Action runs nightly at 09:23 UTC and can
+also be started with **Run workflow**. It downloads OpenAI's latest amd64 deb,
+updates the version and SHA-256 hash together, builds the package, and commits
+the change to the default branch only after the build succeeds. Unchanged
+downloads produce no commit. The repository must allow Actions to write to
+the default branch; branch protection is not bypassed.
+
+For a local update, run `python3 scripts/update-chatgpt` with Python 3.11+,
+`curl`, and `dpkg-deb` available. Review the resulting diff before committing.
+Apply the updated configuration with your usual Home Manager rebuild.
+The upstream URL is mutable, so an uncached build of an older pin can fail
+its hash check after OpenAI replaces the download.
+
 ## Voice dictation
 
 Voxtype replaces the old `voice-dictation` script. After activation, run
