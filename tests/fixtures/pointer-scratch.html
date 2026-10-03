@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Pointer adapter scratch test</title>
+<style>
+  body { font: 20px system-ui; margin: 32px; background: #eef2ff; color: #172554; }
+  button { font: inherit; padding: 16px 32px; }
+  #scroll { height: 180px; width: 420px; overflow: auto; border: 3px solid #334155; }
+  #scroll div { height: 800px; padding: 12px; background: linear-gradient(#fff, #93c5fd); }
+  #track { position: relative; width: 500px; height: 130px; border: 3px solid #334155; touch-action: none; }
+  #handle { position: absolute; left: 12px; top: 30px; width: 70px; height: 70px; background: #2563eb; border-radius: 12px; }
+  output { display: block; margin: 12px 0; font-family: monospace; }
+</style>
+<h1>Pointer adapter scratch test</h1>
+<p>Temporary local controls. No network, submission, or persistent storage.</p>
+<button id="click">Harmless click</button>
+<output id="click-result">Clicks: 0</output>
+<div id="scroll"><div>Scroll this box. The visible counter below should increase.</div></div>
+<output id="scroll-result">Scroll: 0</output>
+<div id="track"><div id="handle"></div></div>
+<output id="drag-result">Drag: idle; releases: 0; x: 12</output>
+<script>
+  const click = document.querySelector('#click');
+  const scroll = document.querySelector('#scroll');
+  const handle = document.querySelector('#handle');
+  const track = document.querySelector('#track');
+  let clicks = 0, releases = 0, start = null, x = 12;
+  click.onclick = () => document.querySelector('#click-result').textContent = `Clicks: ${++clicks}`;
+  scroll.onscroll = () => document.querySelector('#scroll-result').textContent = `Scroll: ${Math.round(scroll.scrollTop)}`;
+  const report = state => document.querySelector('#drag-result').textContent = `Drag: ${state}; releases: ${releases}; x: ${Math.round(x)}`;
+  handle.onpointerdown = event => {
+    if (event.button !== 0) return;
+    start = event.clientX - x;
+    handle.setPointerCapture(event.pointerId);
+    report('held');
+  };
+  handle.onpointermove = event => {
+    if (start === null) return;
+    x = Math.max(0, Math.min(track.clientWidth - handle.clientWidth, event.clientX - start));
+    handle.style.left = `${x}px`;
+    report('held');
+  };
+  handle.onpointerup = event => {
+    if (start === null) return;
+    start = null;
+    releases++;
+    handle.releasePointerCapture(event.pointerId);
+    report('released');
+  };
+  handle.onpointercancel = () => { start = null; report('cancelled'); };
+</script>
+</html>

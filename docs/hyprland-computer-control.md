@@ -1,26 +1,26 @@
-# Hyprland computer control: feasibility and first verification
+# Hyprland computer control: session-local adapter and verification
 
-Research date: 2026-10-03. Repository baseline: `96b26df`.
+Research and device verification date: 2026-10-03. Initial research baseline: `96b26df`.
 
 ## Recommendation
 
-The local display/input building blocks exist. The first unresolved requirement
-is connecting the **intended assistant session** to them with the user's
-authorization and returning actual screenshots. Installing an automation CLI
-alone does not meet the goal of talking to Jarvis and having it observe and
-operate the desktop.
+The authorized connected-computer task has demonstrated screenshot delivery
+and harmless typing on this T14. The next increment is a bounded session-local
+pointer adapter. Installing an automation CLI alone does not establish that an
+arbitrary assistant session can observe and operate the desktop; use the
+verified task route and keep each live action within the owner's authorization.
 
-Start with the supported connected-computer task route and prove that a local
-task can observe the intended unlocked Hyprland session. Only then implement
-an input adapter for that executor. If local desktop Codex is the chosen
-consumer instead, a session-local STDIO MCP adapter is a documented extension
-point. Neither route establishes that the cloud dot's voice session can call
-that MCP server directly.
+Use the supported connected-computer task route with its inherited unlocked
+Hyprland session. A session-local STDIO MCP adapter remains a possible separate
+extension for local desktop Codex, but no MCP registration or persistent
+transport is added here. This task route does not establish that the cloud
+dot's voice session can call a local MCP server directly.
 
-This change adds an **opt-in read-only readiness probe**, not a controller.
-Both existing profiles leave it disabled. It does not capture pixels, enumerate
-window titles, inject input, register MCP, start a service, grant permissions,
-add credentials, or expose a network listener. Nothing is activated by this PR.
+The **opt-in read-only readiness probe** remains disabled in both profiles.
+A separate, explicitly invoked pointer-adapter package provides bounded
+session-local input for authorized tasks. It is not added to either Home Manager
+profile and is not activated by this PR. Neither component registers MCP, starts
+a service, grants permissions, adds credentials, or exposes a network listener.
 
 ## Three boundaries that must be verified separately
 
@@ -121,7 +121,8 @@ other processes already running as the same user.
 ## Smallest supported on-device verification
 
 Perform these in order; stop at the first missing permission or unavailable
-capability. None has been run on a user's device for this PR.
+capability. The screenshot and typing checks below have been performed on the
+T14; pointer-adapter acceptance is tracked separately below.
 
 1. The owner authorizes the intended computer for the dot through its supported
    connection UI. Confirm it is both connected and authorized. Being listed or
@@ -149,7 +150,7 @@ capability. None has been run on a user's device for this PR.
    Record which assistant session performed the action and how the result
    returned. If only local desktop Codex works, report that limitation explicitly.
 
-## Proposed adapter once transport is proven
+## Adapter boundaries
 
 Use a same-user, session-bound process launched for one authorized task. Local
 Codex can own a STDIO MCP process; an authorized dot task can instead use a
@@ -165,8 +166,11 @@ Lua evaluator or unrestricted hyprctl passthrough.
   invalid coordinates and ambiguous window matches.
 - Use compositor IPC for semantic window/workspace actions and Wayland virtual
   input for clicks, typing, scrolling and drag. Persistent pointer/key state
-  belongs to the short-lived adapter, with guaranteed release on error,
-  disconnect and cancellation. Do not implement drag as independent wlrctl calls.
+  belongs to the short-lived adapter. It sends releases on ordinary errors and
+  handled cancellation before destroying its virtual device. A broken compositor
+  connection or uncatchable process termination cannot guarantee that a release
+  event reaches the application; device removal then depends on compositor
+  behavior. Do not implement drag as independent wlrctl calls.
 - Default to disabled. Require the owner's visible opt-in and an immediate stop
   control, bounded session lifetime, conservative operation limits, and
   approvals for consequential actions. Screen content is untrusted data and
@@ -194,8 +198,9 @@ integration tests in an isolated compositor, coordinate/rotation tests,
 held-input cleanup tests, focus-race/cancellation tests and the on-device
 acceptance sequence above.
 
-No unit test here establishes live screenshots, actual input delivery, dot
-transport or voice routing. Those are explicit gates for the next increment.
+Unit tests do not establish live screenshots, actual input delivery, dot
+transport or voice routing. Device evidence below is limited to the exact
+operations and task route tested; it does not replace pointer acceptance.
 
 [linux]: https://learn.chatgpt.com/docs/linux/linux-app
 [mcp]: https://learn.chatgpt.com/docs/extend/mcp
@@ -210,3 +215,147 @@ transport or voice routing. Those are explicit gates for the next increment.
 [wayvnc]: https://github.com/any1/wayvnc
 [protocols]: https://github.com/hyprwm/Hyprland/blob/v0.55.4/src/managers/ProtocolManager.cpp
 [portal-prs]: https://github.com/hyprwm/xdg-desktop-portal-hyprland/pulls
+
+
+## T14 evidence from the authorized connected-computer task
+
+On 2026-10-03, a voice-coordinated local task inherited the existing Wayland,
+Hyprland and user D-Bus session. Its shell could query the compositor with the
+execution environment's approved escalation path. It had `view_image`, but no
+general native desktop input tool. This establishes this particular task route;
+it does not establish arbitrary cloud access to a local MCP server.
+
+After the owner received a heads-up and said he was hands off, the task opened
+an isolated Chrome profile on a static local scratch page. It rechecked the
+scratch window's PID and title before using `grim` to capture only that window's
+rectangle. The local task inspected the resulting pixels through `view_image`.
+The capture was 2536 × 2788 pixels for a 1268 × 1394 logical rectangle at desktop
+position (2726, 40), matching the selected output's scale of 2. The task then
+rechecked focus, used the existing `wtype` executable to type a harmless marker,
+and visually confirmed it in a fresh scratch-only screenshot. It closed only
+the isolated scratch browser. No pointer click, scroll, or drag was established
+by that test.
+
+The owner subsequently logged out and in after the separate workspace/layout
+activation. All further tasks must use their newly inherited session identity;
+the earlier Hyprland socket identity must not be reused. The first read-only
+check after login confirmed an unlocked session and the same two scale-2,
+untransformed outputs. No session environment was recovered from other processes.
+
+### Pointer adapter acceptance target
+
+The adapter uses the official wlr virtual-pointer protocol with one short-lived
+Wayland connection for an entire operation. In particular, drag is a sustained
+button-down/path/button-up sequence; it is not synthesized from separate
+`wlrctl` invocations. The guard checks an observation's freshness, target focus,
+lock state, session identity, and output geometry. The initial implementation
+rejects transformed outputs rather than guessing their coordinate mapping.
+
+These checks reduce risk but do not make input atomic with focus or lock state.
+The compositor and user can change state between a check and delivery. The
+adapter is for a cooperative, explicitly authorized hands-off interval, not
+background per-application isolation. A screenshot, observation file, or page
+instruction is never authorization to act.
+
+The static fixture `tests/fixtures/pointer-scratch.html` provides visible click,
+scroll, and drag counters without network requests, forms, or persistent state.
+Before opening it or injecting input, convey the exact proposed test to the
+owner and wait for the coordinating session to confirm the heads-up reached
+him. Stop input when he resumes using the desktop. Offline implementation and
+tests can continue without holding the user idle.
+
+### Observation and coordinate contract
+
+The first adapter version deliberately accepts only the currently focused
+window, wholly contained on one output. Every output in the layout must be
+untransformed and use scale 1 or 2. It rejects cross-output windows and
+unsupported scales/transforms. `observe` takes an
+explicit target window address, captures that window itself with `grim`, and
+checks the session, lock, focus, window rectangle and output layout both before
+and after capture. It creates new private PNG and JSON files; it does not stamp
+an arbitrary old screenshot as a fresh observation.
+
+Action coordinates are integer pixels within that cropped PNG, not full-screen
+coordinates. A crop pixel `(px, py)` maps to logical desktop coordinates
+`(window_x + px / scale, window_y + py / scale)`. The monitor's origin and extent
+then determine the virtual-pointer absolute position. Negative desktop origins
+must be included rather than treating the desktop's origin as `(0, 0)`.
+
+The observation lasts at most 30 seconds, allowing the screenshot to pass through
+the local image tool. It becomes invalid sooner if the session, focus, target
+window rectangle, or any output geometry changes. Every input event rechecks
+those conditions and lock state. If validation fails, take a new observation
+and inspect it; do not refresh timestamps or replay the old request blindly.
+
+The coordinate model follows the pinned Hyprland 0.55.4 implementations of
+[`VirtualPointer.cpp`](https://github.com/hyprwm/Hyprland/blob/v0.55.4/src/protocols/VirtualPointer.cpp)
+and [`PointerManager.cpp`](https://github.com/hyprwm/Hyprland/blob/v0.55.4/src/managers/PointerManager.cpp):
+unbound virtual-pointer absolute coordinates span the bounding box of the
+logical output layout. This is compositor-specific behavior; a different
+compositor or changed input mapping requires separate validation.
+
+Each button or scroll event carries its own validated crop coordinates. The
+helper emits the absolute movement and that event in one pointer frame, so a
+click or scroll does not rely on wherever the user's cursor happened to be.
+The public action interface exposes only move, three ordinary mouse buttons,
+and bounded wheel steps. It does not expose arbitrary Lua, shell execution,
+keyboard text, or general compositor dispatch.
+
+### Explicit task invocation
+
+Build the reviewed package with `nix build .#hyprland-pointer-adapter`; this does
+not install or enable it in Home Manager. Its public executable is
+`result/bin/hyprland-pointer-adapter`. The raw protocol helper is internal
+`libexec` machinery, not a supported unguarded control interface. These checks
+are not protection against another process with the same user's shell access.
+
+During an authorized hands-off scratch test, use a new private temporary
+directory and an explicitly identified, currently focused scratch-window
+address:
+
+```sh
+umask 077
+scratch_run=$(mktemp -d)
+result/bin/hyprland-pointer-adapter observe \
+  --target-window 0xREPLACE_WITH_VERIFIED_SCRATCH_ADDRESS \
+  --screenshot "$scratch_run/observation.png" \
+  --output "$scratch_run/observation.json"
+```
+
+Inspect the actual PNG through the task's image tool before constructing an
+action. Keep the observation and action files private. An example click request
+uses the observation's exact `observation_id` and a point chosen from the fresh
+scratch image:
+
+```json
+{
+  "schema_version": 1,
+  "observation_id": "REPLACE_WITH_OBSERVATION_ID",
+  "actions": [
+    {"type": "button", "button": "left", "state": "down", "x": 120, "y": 240},
+    {"type": "button", "button": "left", "state": "up", "x": 120, "y": 240}
+  ]
+}
+```
+
+The sample coordinates are illustrative, not safe defaults for another window.
+Save the reviewed request as a mode-0600 `actions.json`, then invoke:
+
+```sh
+result/bin/hyprland-pointer-adapter act \
+  --observation "$scratch_run/observation.json" \
+  --actions "$scratch_run/actions.json"
+```
+
+A move is `{"type":"move","x":120,"y":240}`. A vertical wheel request is
+`{"type":"scroll","dx":0,"dy":2,"x":120,"y":240}`. Each wheel component is
+an integer from -20 to 20. Drag uses a button-down event, a bounded series of
+move events, and a button-up event in the **same** request. Requests contain at
+most 64 actions and must leave no buttons held. The input worker is short-lived;
+there is no idle daemon. Interrupting the wrapper forwards cancellation to its
+helper and initiates cleanup. Do not deliberately test cancellation on a real
+application with unsaved or consequential work.
+
+Take a fresh observation and inspect its pixels after each meaningful scratch
+action. Successful process exit establishes that protocol operations completed;
+the fresh image establishes whether the application responded as intended.

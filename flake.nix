@@ -37,6 +37,42 @@
         inherit system;
         config.allowUnfree = true;
       };
+      hyprlandPointerAdapter = pkgs.stdenv.mkDerivation {
+        pname = "hyprland-pointer-adapter";
+        version = "0.1.0";
+        src = ./.;
+        nativeBuildInputs = [
+          pkgs.makeWrapper
+          pkgs.pkg-config
+          pkgs.wayland-scanner
+        ];
+        buildInputs = [ pkgs.wayland ];
+        dontConfigure = true;
+        buildPhase = ''
+          runHook preBuild
+          protocol=${pkgs.wlr-protocols}/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+          wayland-scanner client-header "$protocol" wlr-virtual-pointer-unstable-v1-client-protocol.h
+          wayland-scanner private-code "$protocol" wlr-virtual-pointer-unstable-v1-protocol.c
+          $CC $NIX_CFLAGS_COMPILE -I. -std=c11 -Wall -Wextra -Werror \
+            -o hyprland-pointer-adapter-helper \
+            src/hyprland-pointer-adapter-helper.c \
+            wlr-virtual-pointer-unstable-v1-protocol.c \
+            $(pkg-config --cflags --libs wayland-client)
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          install -Dm500 hyprland-pointer-adapter-helper \
+            "$out/libexec/hyprland-pointer-adapter-helper"
+          install -Dm400 scripts/hyprland-pointer-adapter.py \
+            "$out/libexec/hyprland-pointer-adapter.py"
+          makeWrapper ${pkgs.python3}/bin/python3 "$out/bin/hyprland-pointer-adapter" \
+            --add-flags "$out/libexec/hyprland-pointer-adapter.py" \
+            --set HYPRLAND_POINTER_HELPER "$out/libexec/hyprland-pointer-adapter-helper" \
+            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.grim ]}
+          runHook postInstall
+        '';
+      };
       mkHome =
         hostProfile:
         home-manager.lib.homeManagerConfiguration {
@@ -71,7 +107,39 @@
         "jwilger@jwilger-t14" = mkHome "jwilger-t14";
       };
 
+      packages.${system}.hyprland-pointer-adapter = hyprlandPointerAdapter;
+
       checks.${system} = {
+        hyprland-pointer-adapter =
+          pkgs.runCommand "check-hyprland-pointer-adapter"
+            {
+              nativeBuildInputs = [
+                pkgs.pkg-config
+                pkgs.python3
+                pkgs.stdenv.cc
+                pkgs.wayland-scanner
+              ];
+              buildInputs = [ pkgs.wayland ];
+            }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_pointer_adapter.py'
+
+              protocol=${pkgs.wlr-protocols}/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+              wayland-scanner client-header "$protocol" wlr-virtual-pointer-unstable-v1-client-protocol.h
+              wayland-scanner private-code "$protocol" wlr-virtual-pointer-unstable-v1-protocol.c
+              $CC $NIX_CFLAGS_COMPILE -I. -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
+                -DPOINTER_HELPER_UNIT_TEST \
+                -o pointer-helper-unit \
+                ${./.}/src/hyprland-pointer-adapter-helper.c \
+                wlr-virtual-pointer-unstable-v1-protocol.c \
+                $(pkg-config --cflags --libs wayland-client)
+              ./pointer-helper-unit
+              test -x ${hyprlandPointerAdapter}/bin/hyprland-pointer-adapter
+              test -x ${hyprlandPointerAdapter}/libexec/hyprland-pointer-adapter-helper
+              test ! -e ${hyprlandPointerAdapter}/bin/hyprland-pointer-adapter-helper
+              touch "$out"
+            '';
         hyprland-control-probe = pkgs.runCommand "check-hyprland-control-probe" { } ''
           export PYTHONDONTWRITEBYTECODE=1
           ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_control_probe.py'
@@ -79,44 +147,46 @@
         '';
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
-        hindsight-integration = pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; } ''
-          for profile in gregor jwilger-t14; do
-            homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
-            if [ "$profile" = jwilger-t14 ]; then
-              homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
-            fi
+        hindsight-integration =
+          pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; }
+            ''
+              for profile in gregor jwilger-t14; do
+                homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
+                if [ "$profile" = jwilger-t14 ]; then
+                  homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
+                fi
 
-            jq -e '
-              .serverMode == "self-hosted" and
-              .harness == "codex" and
-              .apiUrl == "http://127.0.0.1:9077" and
-              .bankIdTemplate == "coding-agent::{gitProject}" and
-              .retainSessions == true and
-              .autoReflect == true and
-              .gitIngest == "message" and
-              .autoUpdate == true
-            ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
-            jq -e '.serverMode == "daemon" and .apiPort == 9077' \
-              "$homeFiles/.hindsight/daemon.json" >/dev/null
-            grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
-              "$homeFiles/.hindsight/openai.env"
+                jq -e '
+                  .serverMode == "self-hosted" and
+                  .harness == "codex" and
+                  .apiUrl == "http://127.0.0.1:9077" and
+                  .bankIdTemplate == "coding-agent::{gitProject}" and
+                  .retainSessions == true and
+                  .autoReflect == true and
+                  .gitIngest == "message" and
+                  .autoUpdate == true
+                ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
+                jq -e '.serverMode == "daemon" and .apiPort == 9077' \
+                  "$homeFiles/.hindsight/daemon.json" >/dev/null
+                grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
+                  "$homeFiles/.hindsight/openai.env"
+                grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
+                  "$homeFiles/.hindsight/openai.env"
+                grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
+                  "$homeFiles/.hindsight/openai.env"
 
-            test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
-            test ! -e "$homeFiles/.codex/config.toml"
-            test ! -e "$homeFiles/.codex/hooks.json"
-          done
-          touch "$out"
-        '';
+                test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
+                test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
+                test ! -e "$homeFiles/.codex/config.toml"
+                test ! -e "$homeFiles/.codex/hooks.json"
+              done
+              touch "$out"
+            '';
         voxtype-integration = pkgs.runCommand "check-voxtype-integration" { } ''
           for profile in gregor jwilger-t14; do
             homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
