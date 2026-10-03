@@ -359,3 +359,33 @@ application with unsaved or consequential work.
 Take a fresh observation and inspect its pixels after each meaningful scratch
 action. Successful process exit establishes that protocol operations completed;
 the fresh image establishes whether the application responded as intended.
+
+
+### Pointer smoke-test findings and wheel correction
+
+A subsequent authorized T14 scratch test confirmed real pointer clicking and
+sustained drag using the adapter. Fresh cropped images showed the click count
+increase from 0 to 1, then the drag handle move from x=12 to x=232 with one
+button release. The input helper exited after each bounded request, and only
+the isolated scratch browser was closed afterward.
+
+The wheel request initially returned protocol success but produced no visible
+scrolling. This was an implementation defect, not a passed test. In the pinned
+Hyprland 0.55.4 `VirtualPointer.cpp`, `axis_discrete` populates an axis event's
+nonzero delta, while a following `axis_stop` in the same frame overwrites that
+slot with zero. Our helper had emitted both before `frame`. The correction
+retains the wheel source and discrete delta through the frame, without the
+same-frame stop. Native regression coverage models that accumulator and checks
+the actual emitted request order. Corrected live scroll acceptance is pending.
+
+The earlier expired observation was refused before input; a subsequent focus
+mismatch stopped capture. The successful retry kept capture, image inspection,
+and action within the unchanged 30-second limit by preparing the small test
+commands in advance. It did not refresh timestamps or suppress focus checks.
+
+Wait for the scratch window's opening animation to settle before observing.
+The screenshot is a crop of its screen rectangle, not a direct read of a private
+window buffer: overlays, rounded corners, and animations can expose other
+content in that rectangle. Inspect the image and stop if the intended control
+is obscured or the capture contains unintended content. Keep the owner informed
+when input ends; do not reserve the desktop during offline builds or diagnosis.

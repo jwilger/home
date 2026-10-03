@@ -87,10 +87,78 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = registry_remove,
 };
 
+#ifdef POINTER_HELPER_UNIT_TEST
+enum test_event_type {
+    TEST_MOTION_ABSOLUTE,
+    TEST_BUTTON,
+    TEST_AXIS_SOURCE,
+    TEST_AXIS_DISCRETE,
+    TEST_FRAME,
+};
+
+struct test_event {
+    enum test_event_type type;
+    int64_t values[4];
+};
+
+static struct test_event test_events[16];
+static size_t test_event_count;
+
+static void record_event(enum test_event_type type, int64_t a, int64_t b,
+                         int64_t c, int64_t d) {
+    if (test_event_count >= sizeof(test_events) / sizeof(test_events[0])) abort();
+    test_events[test_event_count++] = (struct test_event){
+        .type = type,
+        .values = {a, b, c, d},
+    };
+}
+
+static void emit_motion_absolute(uint32_t x, uint32_t y, uint32_t x_extent,
+                                 uint32_t y_extent) {
+    record_event(TEST_MOTION_ABSOLUTE, x, y, x_extent, y_extent);
+}
+
+static void emit_button(uint32_t button, uint32_t state) {
+    record_event(TEST_BUTTON, button, state, 0, 0);
+}
+
+static void emit_axis_source(uint32_t source) {
+    record_event(TEST_AXIS_SOURCE, source, 0, 0, 0);
+}
+
+static void emit_axis_discrete(uint32_t axis, wl_fixed_t value, int32_t discrete) {
+    record_event(TEST_AXIS_DISCRETE, axis, value, discrete, 0);
+}
+
+static int flush_frame(void) {
+    record_event(TEST_FRAME, 0, 0, 0, 0);
+    return 0;
+}
+#else
+static void emit_motion_absolute(uint32_t x, uint32_t y, uint32_t x_extent,
+                                 uint32_t y_extent) {
+    zwlr_virtual_pointer_v1_motion_absolute(pointer, timestamp_ms(), x, y,
+                                            x_extent, y_extent);
+}
+
+static void emit_button(uint32_t button, uint32_t state) {
+    zwlr_virtual_pointer_v1_button(pointer, timestamp_ms(), button, state);
+}
+
+static void emit_axis_source(uint32_t source) {
+    zwlr_virtual_pointer_v1_axis_source(pointer, source);
+}
+
+static void emit_axis_discrete(uint32_t axis, wl_fixed_t value, int32_t discrete) {
+    zwlr_virtual_pointer_v1_axis_discrete(pointer, timestamp_ms(), axis, value,
+                                          discrete);
+}
+
 static int flush_frame(void) {
     zwlr_virtual_pointer_v1_frame(pointer);
     return bounded_roundtrip(false);
 }
+#endif
 
 static bool next_release(uint32_t *button) {
     if (held_count == 0) return false;
@@ -141,8 +209,7 @@ static int perform(char *line) {
         }
         if (strtok_r(NULL, " ", &save) != NULL || values[2] == 0 || values[3] == 0 ||
             values[0] > values[2] || values[1] > values[3]) return -1;
-        zwlr_virtual_pointer_v1_motion_absolute(pointer, timestamp_ms(), values[0],
-                                                values[1], values[2], values[3]);
+        emit_motion_absolute(values[0], values[1], values[2], values[3]);
     } else if (strcmp(kind, "button") == 0) {
         uint32_t position[4], button, state;
         for (size_t index = 0; index < 4; ++index) {
@@ -162,9 +229,8 @@ static int perform(char *line) {
         } else {
             if (found == held_count) return -1;
         }
-        zwlr_virtual_pointer_v1_motion_absolute(pointer, timestamp_ms(), position[0],
-                                                position[1], position[2], position[3]);
-        zwlr_virtual_pointer_v1_button(pointer, timestamp_ms(), button, state);
+        emit_motion_absolute(position[0], position[1], position[2], position[3]);
+        emit_button(button, state);
         if (flush_frame() != 0) return -1;
         if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
             memmove(&held[found], &held[found + 1], (held_count - found - 1) * sizeof(held[0]));
@@ -182,18 +248,15 @@ static int perform(char *line) {
         if (dx_text == NULL || dy_text == NULL || strtok_r(NULL, " ", &save) != NULL ||
             !parse_int(dx_text, &dx) || !parse_int(dy_text, &dy) || (dx == 0 && dy == 0) ||
             position[2] == 0 || position[3] == 0 || position[0] > position[2] || position[1] > position[3]) return -1;
-        zwlr_virtual_pointer_v1_motion_absolute(pointer, timestamp_ms(), position[0],
-                                                position[1], position[2], position[3]);
-        zwlr_virtual_pointer_v1_axis_source(pointer, WL_POINTER_AXIS_SOURCE_WHEEL);
+        emit_motion_absolute(position[0], position[1], position[2], position[3]);
+        emit_axis_source(WL_POINTER_AXIS_SOURCE_WHEEL);
         if (dx != 0) {
-            zwlr_virtual_pointer_v1_axis_discrete(pointer, timestamp_ms(),
-                WL_POINTER_AXIS_HORIZONTAL_SCROLL, wl_fixed_from_int(dx * 15), dx);
-            zwlr_virtual_pointer_v1_axis_stop(pointer, timestamp_ms(), WL_POINTER_AXIS_HORIZONTAL_SCROLL);
+            emit_axis_discrete(WL_POINTER_AXIS_HORIZONTAL_SCROLL,
+                               wl_fixed_from_int(dx * 15), dx);
         }
         if (dy != 0) {
-            zwlr_virtual_pointer_v1_axis_discrete(pointer, timestamp_ms(),
-                WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(dy * 15), dy);
-            zwlr_virtual_pointer_v1_axis_stop(pointer, timestamp_ms(), WL_POINTER_AXIS_VERTICAL_SCROLL);
+            emit_axis_discrete(WL_POINTER_AXIS_VERTICAL_SCROLL,
+                               wl_fixed_from_int(dy * 15), dy);
         }
     } else {
         return -1;
@@ -280,6 +343,49 @@ int main(void) {
     if (!next_release(&button) || button != 0x111) return 1;
     if (!next_release(&button) || button != 0x110) return 1;
     if (next_release(&button)) return 1;
+
+    char vertical_scroll[] = "scroll 40 70 1000 1200 0 2";
+    test_event_count = 0;
+    if (perform(vertical_scroll) != 0 || test_event_count != 4) return 1;
+    if (test_events[0].type != TEST_MOTION_ABSOLUTE ||
+        test_events[0].values[0] != 40 || test_events[0].values[1] != 70 ||
+        test_events[0].values[2] != 1000 || test_events[0].values[3] != 1200)
+        return 1;
+    if (test_events[1].type != TEST_AXIS_SOURCE ||
+        test_events[1].values[0] != WL_POINTER_AXIS_SOURCE_WHEEL)
+        return 1;
+    if (test_events[2].type != TEST_AXIS_DISCRETE ||
+        test_events[2].values[0] != WL_POINTER_AXIS_VERTICAL_SCROLL ||
+        test_events[2].values[1] != wl_fixed_from_int(30) ||
+        test_events[2].values[2] != 2)
+        return 1;
+    if (test_events[3].type != TEST_FRAME) return 1;
+
+    /* Match the pinned Hyprland accumulator: axis_discrete supplies 120 units
+       per wheel step and frame emits it. A same-frame axis_stop would replace
+       these values with zero, which is the regression this sequence excludes. */
+    int32_t compositor_delta_discrete = 0;
+    for (size_t index = 0; index < test_event_count; ++index) {
+        if (test_events[index].type == TEST_AXIS_DISCRETE)
+            compositor_delta_discrete = (int32_t)test_events[index].values[2] * 120;
+        if (test_events[index].type == TEST_FRAME && compositor_delta_discrete != 240)
+            return 1;
+    }
+
+    char diagonal_scroll[] = "scroll 4 7 100 120 -2 3";
+    test_event_count = 0;
+    if (perform(diagonal_scroll) != 0 || test_event_count != 5) return 1;
+    if (test_events[0].type != TEST_MOTION_ABSOLUTE ||
+        test_events[1].type != TEST_AXIS_SOURCE ||
+        test_events[2].type != TEST_AXIS_DISCRETE ||
+        test_events[2].values[0] != WL_POINTER_AXIS_HORIZONTAL_SCROLL ||
+        test_events[2].values[2] != -2 ||
+        test_events[3].type != TEST_AXIS_DISCRETE ||
+        test_events[3].values[0] != WL_POINTER_AXIS_VERTICAL_SCROLL ||
+        test_events[3].values[2] != 3 ||
+        test_events[4].type != TEST_FRAME)
+        return 1;
+
     signal_handler(SIGTERM);
     return stopping == 1 ? 0 : 1;
 }
