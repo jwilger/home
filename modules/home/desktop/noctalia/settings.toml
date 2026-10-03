@@ -147,7 +147,7 @@ audio_source = "both"
 restore_portal = true
 
 [plugins]
-enabled = [ "noctalia/timer", "noctalia/screen_recorder" ]
+enabled = [ "noctalia/timer", "noctalia/screen_recorder", "maddingo/hypr-layout-switcher" ]
 
 [shell.screen_corners]
 enabled = true

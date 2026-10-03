@@ -33,7 +33,7 @@ order = [ "main" ]
     radius = 0
     reserve_space = true
     shadow = true
-    start = [ "spacer", "workspaces", "spacer_5", "active_window" ]
+    start = [ "spacer", "workspaces", "spacer_5", "layout_switcher", "spacer_6", "active_window" ]
     thickness = 34
     widget_spacing = 6
 
@@ -152,7 +152,7 @@ position = "top_right"
 position_vertical = "top_center"
 
 [plugins]
-enabled = [ "noctalia/screen_recorder", "noctalia/wallhaven" ]
+enabled = [ "noctalia/screen_recorder", "noctalia/wallhaven", "maddingo/hypr-layout-switcher" ]
 
 [shell]
 app_icon_colorize = true
@@ -294,6 +294,20 @@ type = "spacer"
 
 [widget.spacer_5]
 type = "spacer"
+length = 20
+
+[widget.spacer_6]
+type = "spacer"
+length = 20
+
+[widget.layout_switcher]
+type = "maddingo/hypr-layout-switcher:toggle"
+
+[widget.workspaces]
+label_source = "name"
+max_label_chars = 1
+show_labels = true
+show_all_outputs = false
 
 [widget.tray]
 match_adjacent_spacing = true

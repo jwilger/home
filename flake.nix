@@ -20,6 +20,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
+    noctalia-plugins = {
+      # Compatible Luau plugins for the pinned Noctalia 5.1 shell.
+      url = "github:noctalia-dev/community-plugins/df2b7ed8029d9142a601cd6025e3dc29f9f6d52f";
+      flake = false;
+    };
     zjstatus.url = "github:dj95/zjstatus/053898e1e245c0df9aaaa783710e88e2926fbbb2";
   };
 
@@ -212,6 +217,31 @@
           done
           touch "$out"
         '';
+        hyprland-desktop-controls =
+          let
+            generatedConfig =
+              profile:
+              pkgs.writeText "${profile}-hyprland.lua"
+                self.homeConfigurations."jwilger@${profile}".config.xdg.configFile."hypr/hyprland.lua".text;
+            plugin =
+              self.homeConfigurations."jwilger@jwilger-t14".config.xdg.dataFile."noctalia/plugins/hypr-layout-switcher".source;
+          in
+          pkgs.runCommand "check-hyprland-desktop-controls"
+            {
+              nativeBuildInputs = [
+                pkgs.lua5_5
+                pkgs.python3
+              ];
+            }
+            ''
+              lua ${./tests/hyprland-desktop-controls.lua} ${./modules/home/desktop/hyprland/desktop-controls.lua}
+              lua ${./tests/hyprland-generated-config.lua} ${generatedConfig "gregor"} gregor
+              lua ${./tests/hyprland-generated-config.lua} ${generatedConfig "jwilger-t14"} jwilger-t14
+              python ${./tests/noctalia-desktop-controls.py} ${./modules/home/desktop/noctalia} ${plugin}
+              python ${./tests/verify-hyprland-config.py} ${pkgs.hyprland}/bin/Hyprland \
+                ${./modules/home/desktop/hyprland} ${generatedConfig "gregor"} ${generatedConfig "jwilger-t14"}
+              touch "$out"
+            '';
         noctalia-startup-order = pkgs.runCommand "check-noctalia-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"

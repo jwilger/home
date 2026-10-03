@@ -30,6 +30,11 @@ in
       "${noctaliaPkg}/share/noctalia/assets/images/distros/nixos.svg";
   };
 
+  # The real upstream Luau plugin, pinned alongside the shell. Plugin data lives
+  # under XDG_DATA_HOME; Noctalia's writable preferences remain in its baseline.
+  xdg.dataFile."noctalia/plugins/hypr-layout-switcher".source =
+    "${jwilgerInputs.noctalia-plugins}/hypr-layout-switcher";
+
   home.file = {
     ".local/bin/lock-screen".source = lockScreen;
     ".local/share/wallpapers/wallpaper.png".source = ./wallpaper.png;
