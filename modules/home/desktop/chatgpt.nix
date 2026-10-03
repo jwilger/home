@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
   chatgpt = pkgs.stdenv.mkDerivation rec {
     pname = "chatgpt";
@@ -85,6 +85,10 @@ let
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
+        --set CODEX_HOME "${config.home.homeDirectory}/.codex-chatgpt" \
+        --set CODEX_ELECTRON_USER_DATA_PATH "${config.xdg.configHome}/ChatGPT" \
+        --run "${pkgs.coreutils}/bin/mkdir -p -m 700 ${lib.escapeShellArg "${config.home.homeDirectory}/.codex-chatgpt"}" \
+        --add-flags "--user-data-dir=${lib.escapeShellArg "${config.xdg.configHome}/ChatGPT"}" \
         --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath runtimeDependencies}" \
         --add-flags "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+--ozone-platform-hint=auto --enable-features=WaylandWindowDecorations}}"
 
