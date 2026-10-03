@@ -42,6 +42,42 @@
         inherit system;
         config.allowUnfree = true;
       };
+      hyprlandPointerAdapter = pkgs.stdenv.mkDerivation {
+        pname = "hyprland-pointer-adapter";
+        version = "0.1.0";
+        src = ./.;
+        nativeBuildInputs = [
+          pkgs.makeWrapper
+          pkgs.pkg-config
+          pkgs.wayland-scanner
+        ];
+        buildInputs = [ pkgs.wayland ];
+        dontConfigure = true;
+        buildPhase = ''
+          runHook preBuild
+          protocol=${pkgs.wlr-protocols}/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+          wayland-scanner client-header "$protocol" wlr-virtual-pointer-unstable-v1-client-protocol.h
+          wayland-scanner private-code "$protocol" wlr-virtual-pointer-unstable-v1-protocol.c
+          $CC $NIX_CFLAGS_COMPILE -I. -std=c11 -Wall -Wextra -Werror \
+            -o hyprland-pointer-adapter-helper \
+            src/hyprland-pointer-adapter-helper.c \
+            wlr-virtual-pointer-unstable-v1-protocol.c \
+            $(pkg-config --cflags --libs wayland-client)
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          install -Dm500 hyprland-pointer-adapter-helper \
+            "$out/libexec/hyprland-pointer-adapter-helper"
+          install -Dm400 scripts/hyprland-pointer-adapter.py \
+            "$out/libexec/hyprland-pointer-adapter.py"
+          makeWrapper ${pkgs.python3}/bin/python3 "$out/bin/hyprland-pointer-adapter" \
+            --add-flags "$out/libexec/hyprland-pointer-adapter.py" \
+            --set HYPRLAND_POINTER_HELPER "$out/libexec/hyprland-pointer-adapter-helper" \
+            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.grim ]}
+          runHook postInstall
+        '';
+      };
       mkHome =
         hostProfile:
         home-manager.lib.homeManagerConfiguration {
@@ -76,7 +112,44 @@
         "jwilger@jwilger-t14" = mkHome "jwilger-t14";
       };
 
+      packages.${system}.hyprland-pointer-adapter = hyprlandPointerAdapter;
+
       checks.${system} = {
+        hyprland-pointer-adapter =
+          pkgs.runCommand "check-hyprland-pointer-adapter"
+            {
+              nativeBuildInputs = [
+                pkgs.pkg-config
+                pkgs.python3
+                pkgs.stdenv.cc
+                pkgs.wayland-scanner
+              ];
+              buildInputs = [ pkgs.wayland ];
+            }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_pointer_adapter.py'
+
+              protocol=${pkgs.wlr-protocols}/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+              wayland-scanner client-header "$protocol" wlr-virtual-pointer-unstable-v1-client-protocol.h
+              wayland-scanner private-code "$protocol" wlr-virtual-pointer-unstable-v1-protocol.c
+              $CC $NIX_CFLAGS_COMPILE -I. -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
+                -DPOINTER_HELPER_UNIT_TEST \
+                -o pointer-helper-unit \
+                ${./.}/src/hyprland-pointer-adapter-helper.c \
+                wlr-virtual-pointer-unstable-v1-protocol.c \
+                $(pkg-config --cflags --libs wayland-client)
+              ./pointer-helper-unit
+              test -x ${hyprlandPointerAdapter}/bin/hyprland-pointer-adapter
+              test -x ${hyprlandPointerAdapter}/libexec/hyprland-pointer-adapter-helper
+              test ! -e ${hyprlandPointerAdapter}/bin/hyprland-pointer-adapter-helper
+              touch "$out"
+            '';
+        hyprland-control-probe = pkgs.runCommand "check-hyprland-control-probe" { } ''
+          export PYTHONDONTWRITEBYTECODE=1
+          ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_control_probe.py'
+          touch "$out"
+        '';
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
         hindsight-integration =
