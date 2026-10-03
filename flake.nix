@@ -20,6 +20,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
+    noctalia-plugins = {
+      # Compatible Luau plugins for the pinned Noctalia 5.1 shell.
+      url = "github:noctalia-dev/community-plugins/df2b7ed8029d9142a601cd6025e3dc29f9f6d52f";
+      flake = false;
+    };
     zjstatus.url = "github:dj95/zjstatus/053898e1e245c0df9aaaa783710e88e2926fbbb2";
   };
 
@@ -74,44 +79,46 @@
       checks.${system} = {
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
-        hindsight-integration = pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; } ''
-          for profile in gregor jwilger-t14; do
-            homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
-            if [ "$profile" = jwilger-t14 ]; then
-              homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
-            fi
+        hindsight-integration =
+          pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; }
+            ''
+              for profile in gregor jwilger-t14; do
+                homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
+                if [ "$profile" = jwilger-t14 ]; then
+                  homeFiles="${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files"
+                fi
 
-            jq -e '
-              .serverMode == "self-hosted" and
-              .harness == "codex" and
-              .apiUrl == "http://127.0.0.1:9077" and
-              .bankIdTemplate == "coding-agent::{gitProject}" and
-              .retainSessions == true and
-              .autoReflect == true and
-              .gitIngest == "message" and
-              .autoUpdate == true
-            ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
-            jq -e '.serverMode == "daemon" and .apiPort == 9077' \
-              "$homeFiles/.hindsight/daemon.json" >/dev/null
-            grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
-              "$homeFiles/.hindsight/openai.env"
-            grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
-              "$homeFiles/.hindsight/openai.env"
+                jq -e '
+                  .serverMode == "self-hosted" and
+                  .harness == "codex" and
+                  .apiUrl == "http://127.0.0.1:9077" and
+                  .bankIdTemplate == "coding-agent::{gitProject}" and
+                  .retainSessions == true and
+                  .autoReflect == true and
+                  .gitIngest == "message" and
+                  .autoUpdate == true
+                ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
+                jq -e '.serverMode == "daemon" and .apiPort == 9077' \
+                  "$homeFiles/.hindsight/daemon.json" >/dev/null
+                grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
+                  "$homeFiles/.hindsight/openai.env"
+                grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
+                  "$homeFiles/.hindsight/openai.env"
+                grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
+                  "$homeFiles/.hindsight/openai.env"
 
-            test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
-            test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
-            test ! -e "$homeFiles/.codex/config.toml"
-            test ! -e "$homeFiles/.codex/hooks.json"
-          done
-          touch "$out"
-        '';
+                test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
+                test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
+                test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
+                test ! -e "$homeFiles/.codex/config.toml"
+                test ! -e "$homeFiles/.codex/hooks.json"
+              done
+              touch "$out"
+            '';
         voxtype-integration = pkgs.runCommand "check-voxtype-integration" { } ''
           for profile in gregor jwilger-t14; do
             homeFiles="${self.homeConfigurations."jwilger@gregor".activationPackage}/home-files"
@@ -137,6 +144,31 @@
           done
           touch "$out"
         '';
+        hyprland-desktop-controls =
+          let
+            generatedConfig =
+              profile:
+              pkgs.writeText "${profile}-hyprland.lua"
+                self.homeConfigurations."jwilger@${profile}".config.xdg.configFile."hypr/hyprland.lua".text;
+            plugin =
+              self.homeConfigurations."jwilger@jwilger-t14".config.xdg.dataFile."noctalia/plugins/hypr-layout-switcher".source;
+          in
+          pkgs.runCommand "check-hyprland-desktop-controls"
+            {
+              nativeBuildInputs = [
+                pkgs.lua5_5
+                pkgs.python3
+              ];
+            }
+            ''
+              lua ${./tests/hyprland-desktop-controls.lua} ${./modules/home/desktop/hyprland/desktop-controls.lua}
+              lua ${./tests/hyprland-generated-config.lua} ${generatedConfig "gregor"} gregor
+              lua ${./tests/hyprland-generated-config.lua} ${generatedConfig "jwilger-t14"} jwilger-t14
+              python ${./tests/noctalia-desktop-controls.py} ${./modules/home/desktop/noctalia} ${plugin}
+              python ${./tests/verify-hyprland-config.py} ${pkgs.hyprland}/bin/Hyprland \
+                ${./modules/home/desktop/hyprland} ${generatedConfig "gregor"} ${generatedConfig "jwilger-t14"}
+              touch "$out"
+            '';
         noctalia-startup-order = pkgs.runCommand "check-noctalia-startup" { } ''
           homeFiles=${self.homeConfigurations."jwilger@jwilger-t14".activationPackage}/home-files
           hyprlandConfig="$homeFiles/.config/hypr/hyprland.lua"

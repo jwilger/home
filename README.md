@@ -22,6 +22,65 @@ copies into writable user configuration. After intentional UI changes, run
 repository and leaves the Git diff uncommitted for inspection. Generated state
 and plugin data are never captured.
 
+## Hyprland workspaces and layouts
+
+On the T14, **Super+1–9** selects the same logical workspace on the StudioDisplay
+and laptop together, retaining keyboard focus on the initiating monitor. Clicking
+a Noctalia workspace pill also synchronizes the other display. Hyprland still
+needs unique physical workspaces: the StudioDisplay uses IDs 1–9 and eDP-1 uses
+11–19, named `1-laptop` through `9-laptop`. Both bars display the logical 1–9 labels
+in numeric order. The StudioDisplay is matched by description, not its changing
+DP connector number.
+
+- **Super+Shift+1–9:** move the focused window to that logical workspace on its
+  current monitor, follow it, and switch both displays to that pair
+- **Super+[ / Super+]:** move the focused window to the matching workspace on the
+  left/right monitor and follow it. **Super+Ctrl+Shift+H/L** and
+  **Super+Ctrl+Shift+Left/Right** are aliases. These replace the old bracket
+  `movewindowto` dispatcher, which is absent from the pinned Hyprland.
+- **Super+Ctrl+H/L or Left/Right:** focus the left/right monitor in every layout
+- **Super+H/J/K/L or arrows:** focus in that direction; in monocle, left/up selects
+  the previous window and right/down selects the next
+- **Super+Shift+H/J/K/L or arrows:** move windows; scrolling retains horizontal
+  column swaps when an adjacent column exists, with native movement at edges
+- **Super+C, Super+R, Super+Minus/Equal:** scrolling-only fit and column sizing;
+  safely do nothing in other layouts or without a tiled window
+
+When only one display is connected, numbered shortcuts operate its own bank and
+monitor-transfer shortcuts safely do nothing. Hyprland preserves any windows
+migrated from an unplugged output; their workspaces remain available in the bar
+and return to their assigned display when it reconnects. Automatic synchronization
+leaves a special workspace open on either monitor alone; a deferred pair may remain
+until the next workspace action. An explicit numbered shortcut selects regular
+workspaces using native Hyprland behavior. Gregor keeps its ordinary single-bank
+1–9 workspace configuration.
+
+Home Manager installs the pinned upstream **Hyprland Layout Switcher** plugin
+(`maddingo/hypr-layout-switcher`, version 0.1.1) and enables it in both Noctalia
+baselines. The top-left bar is workspaces → spacer → layout switcher → spacer →
+active window title. Click the switcher to cycle **dwindle → master → monocle →
+scrolling**. All four are built into the pinned Hyprland 0.55.4; T14's compositor
+is system-owned and must provide the same Lua APIs.
+
+The upstream widget follows the globally focused workspace, even when clicked
+on the other monitor's bar. Layout changes apply to that physical workspace,
+so each side of a pair can use a different layout. They are runtime choices:
+reloading Hyprland restores this repository's scrolling defaults. Noctalia's
+locally installed plugin takes precedence over a store-downloaded copy. If a
+hand-copied plugin already occupies `~/.local/share/noctalia/plugins/hypr-layout-switcher`,
+back up that directory before activating Home Manager; no existing plugin files
+are forcibly deleted by this configuration.
+
+Run the focused, hardware-free regression check with
+`nix build .#checks.x86_64-linux.hyprland-desktop-controls`. It executes the real
+controller against a stateful compositor double, loads the actual generated Lua
+for both profiles, validates the pinned plugin plus Noctalia bar/settings, and
+runs the actual pinned Hyprland's `--verify-config` parser without starting a session.
+Run `just check` for the complete configuration. After a normal activation and a
+fresh login, also verify both monitors, bar clicks, window transfers, docking,
+and each layout in the live session; simulated tests cannot prove compositor
+animation, actual monitor timing, or rendered bar geometry.
+
 ## ChatGPT desktop updates
 
 The `Update ChatGPT desktop` GitHub Action runs nightly at 09:23 UTC and can
