@@ -14,23 +14,39 @@ let
     ];
   };
   exec = keys: command: bind keys "hl.dsp.exec_cmd(${builtins.toJSON command})";
-  workspaceRules = map (number: {
-    _args = [
-      (
+  pairedWorkspaces = config.jwilger.hostProfile == "jwilger-t14";
+  control = keys: action: bind keys ''function() require("desktop-controls").${action} end'';
+  workspaceRules = lib.concatMap (
+    number:
+    [
+      {
+        _args = [
+          {
+            workspace = builtins.toString number;
+            layout = "scrolling";
+            monitor = if pairedWorkspaces then "desc:Apple Computer Inc StudioDisplay" else "DP-3";
+            persistent = true;
+            default = number == 1;
+          }
+        ];
+      }
+    ]
+    ++ lib.optional pairedWorkspaces {
+      _args = [
         {
-          workspace = builtins.toString number;
+          workspace = builtins.toString (number + 10);
+          default_name = "${builtins.toString number}-laptop";
           layout = "scrolling";
-        }
-        // lib.optionalAttrs (config.jwilger.hostProfile == "gregor") {
-          monitor = "DP-3";
+          monitor = "eDP-1";
           persistent = true;
+          default = number == 1;
         }
-      )
-    ];
-  }) (lib.range 1 9);
+      ];
+    }
+  ) (lib.range 1 9);
   workspaceBinds = lib.concatMap (number: [
-    (bind "SUPER + ${builtins.toString number}" ''hl.dsp.focus({ workspace = "${builtins.toString number}" })'')
-    (bind "SUPER + SHIFT + ${builtins.toString number}" ''hl.dsp.window.move({ workspace = "${builtins.toString number}" })'')
+    (control "SUPER + ${builtins.toString number}" "workspace(${builtins.toString number})")
+    (control "SUPER + SHIFT + ${builtins.toString number}" "move_to_workspace(${builtins.toString number})")
   ]) (lib.range 1 9);
   noctaliaThemeSeed = pkgs.writeText "hyprland-noctalia-theme.lua" ''
     local primary = "rgb(cba6f7)"
@@ -172,6 +188,8 @@ in
           wrap_swapcol = false;
         };
 
+        # Native directional moves at a layout edge reach the paired monitor.
+        binds.window_direction_monitor_fallback = true;
         animations.enabled = true;
         cursor = {
           default_monitor =
@@ -322,26 +340,34 @@ in
         (bind "SUPER + Q" "hl.dsp.window.close()")
         (bind "SUPER + F" ''hl.dsp.window.fullscreen({ mode = "maximized" })'')
         (bind "SUPER + SHIFT + F" ''hl.dsp.window.fullscreen({ mode = "fullscreen" })'')
-        (bind "SUPER + C" ''hl.dsp.layout("fit active")'')
-        (bind "SUPER + H" ''hl.dsp.layout("focus l")'')
-        (bind "SUPER + J" ''hl.dsp.focus({ direction = "d" })'')
-        (bind "SUPER + K" ''hl.dsp.focus({ direction = "u" })'')
-        (bind "SUPER + L" ''hl.dsp.layout("focus r")'')
-        (bind "SUPER + LEFT" ''hl.dsp.layout("focus l")'')
-        (bind "SUPER + DOWN" ''hl.dsp.focus({ direction = "d" })'')
-        (bind "SUPER + UP" ''hl.dsp.focus({ direction = "u" })'')
-        (bind "SUPER + RIGHT" ''hl.dsp.layout("focus r")'')
-        (bind "SUPER + SHIFT + H" ''hl.dsp.layout("swapcol l")'')
-        (bind "SUPER + SHIFT + J" ''hl.dsp.window.move({ direction = "d" })'')
-        (bind "SUPER + SHIFT + K" ''hl.dsp.window.move({ direction = "u" })'')
-        (bind "SUPER + SHIFT + L" ''hl.dsp.layout("swapcol r")'')
-        (bind "SUPER + SHIFT + LEFT" ''hl.dsp.layout("swapcol l")'')
-        (bind "SUPER + SHIFT + DOWN" ''hl.dsp.window.move({ direction = "d" })'')
-        (bind "SUPER + SHIFT + UP" ''hl.dsp.window.move({ direction = "u" })'')
-        (bind "SUPER + SHIFT + RIGHT" ''hl.dsp.layout("swapcol r")'')
-        (bind "SUPER + R" ''hl.dsp.layout("colresize +conf")'')
-        (bind "SUPER + MINUS" ''hl.dsp.layout("colresize -0.1")'')
-        (bind "SUPER + EQUAL" ''hl.dsp.layout("colresize +0.1")'')
+        (control "SUPER + C" ''scrolling("fit active")'')
+        (control "SUPER + H" ''focus("l")'')
+        (control "SUPER + J" ''focus("d")'')
+        (control "SUPER + K" ''focus("u")'')
+        (control "SUPER + L" ''focus("r")'')
+        (control "SUPER + LEFT" ''focus("l")'')
+        (control "SUPER + DOWN" ''focus("d")'')
+        (control "SUPER + UP" ''focus("u")'')
+        (control "SUPER + RIGHT" ''focus("r")'')
+        (control "SUPER + SHIFT + H" ''move("l")'')
+        (control "SUPER + SHIFT + J" ''move("d")'')
+        (control "SUPER + SHIFT + K" ''move("u")'')
+        (control "SUPER + SHIFT + L" ''move("r")'')
+        (control "SUPER + SHIFT + LEFT" ''move("l")'')
+        (control "SUPER + SHIFT + DOWN" ''move("d")'')
+        (control "SUPER + SHIFT + UP" ''move("u")'')
+        (control "SUPER + SHIFT + RIGHT" ''move("r")'')
+        (bind "SUPER + CTRL + H" ''hl.dsp.focus({ monitor = "l" })'')
+        (bind "SUPER + CTRL + L" ''hl.dsp.focus({ monitor = "r" })'')
+        (bind "SUPER + CTRL + LEFT" ''hl.dsp.focus({ monitor = "l" })'')
+        (bind "SUPER + CTRL + RIGHT" ''hl.dsp.focus({ monitor = "r" })'')
+        (control "SUPER + CTRL + SHIFT + H" ''move_to_monitor("l")'')
+        (control "SUPER + CTRL + SHIFT + L" ''move_to_monitor("r")'')
+        (control "SUPER + CTRL + SHIFT + LEFT" ''move_to_monitor("l")'')
+        (control "SUPER + CTRL + SHIFT + RIGHT" ''move_to_monitor("r")'')
+        (control "SUPER + R" ''scrolling("colresize +conf")'')
+        (control "SUPER + MINUS" ''scrolling("colresize -0.1")'')
+        (control "SUPER + EQUAL" ''scrolling("colresize +0.1")'')
         (bind "SUPER + SHIFT + MINUS" "hl.dsp.window.resize({ x = 0, y = -50, relative = true })")
         (bind "SUPER + SHIFT + EQUAL" "hl.dsp.window.resize({ x = 0, y = 50, relative = true })")
         (exec "PRINT" ''grim -g "$(slurp)" - | wl-copy'')
@@ -371,8 +397,8 @@ in
                       hl.dispatch(hl.dsp.focus({ window = "floating" }))
                     end
                   end'')
-        (bind "SUPER + BRACKETLEFT" ''hl.dsp.layout("movewindowto l")'')
-        (bind "SUPER + BRACKETRIGHT" ''hl.dsp.layout("movewindowto r")'')
+        (control "SUPER + BRACKETLEFT" ''move_to_monitor("l")'')
+        (control "SUPER + BRACKETRIGHT" ''move_to_monitor("r")'')
       ]
       ++ workspaceBinds;
     };
@@ -382,6 +408,7 @@ in
       -- first frame. The declarative colors above remain the safe fallback
       -- until Noctalia has written its current palette.
       package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
+      require("desktop-controls").setup(${lib.boolToString pairedWorkspaces})
       local noctalia_ok, noctalia_theme = pcall(require, "noctalia")
       if noctalia_ok then
         noctalia_theme.apply_theme()
@@ -399,6 +426,8 @@ in
       end)
     '';
   };
+
+  xdg.configFile."hypr/desktop-controls.lua".source = ./hyprland/desktop-controls.lua;
 
   # Seed a writable theme module. Noctalia replaces it in-place later; keeping
   # it outside the Nix store is required by Noctalia's template post-hook.
