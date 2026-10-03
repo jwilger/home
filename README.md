@@ -37,6 +37,14 @@ Apply the updated configuration with your usual Home Manager rebuild.
 The upstream URL is mutable, so an uncached build of an older pin can fail
 its hash check after OpenAI replaces the download.
 
+## Hyprland computer-control feasibility
+
+See [the transport, security and verification plan](docs/hyprland-computer-control.md)
+for voice-driven desktop control. The optional
+`jwilger.computerControlProbe.enable` readiness probe is disabled by default.
+It checks local prerequisites only; it does not grant assistant access or
+provide screenshot/input control.
+
 ## Voice dictation
 
 Voxtype replaces the old `voice-dictation` script. After activation, run

@@ -72,6 +72,11 @@
       };
 
       checks.${system} = {
+        hyprland-control-probe = pkgs.runCommand "check-hyprland-control-probe" { } ''
+          export PYTHONDONTWRITEBYTECODE=1
+          ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_control_probe.py'
+          touch "$out"
+        '';
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
         hindsight-integration = pkgs.runCommand "check-hindsight-integration" { nativeBuildInputs = [ pkgs.jq ]; } ''

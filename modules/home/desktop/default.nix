@@ -3,6 +3,7 @@
   imports = [
     (import ./chatgpt.nix)
     (import ./claude-desktop.nix)
+    (import ./computer-control-probe.nix)
     (import ./hyprland.nix)
     (import ./insync)
     (import ./nignite.nix)
