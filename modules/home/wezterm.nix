@@ -7,11 +7,11 @@
 
     settings =
       lib.optionalAttrs (config.jwilger.hostProfile == "jwilger-t14") {
-        # WezTerm's mux otherwise captures the desktop session's SSH agent
-        # (typically GNOME Keyring) and exposes it to panes through its own
-        # /run/user/.../wezterm/agent.* socket. Point that proxy at 1Password on
-        # the T14; Gregor selects its agent in the shell through Lanyard.
-        default_ssh_auth_sock = "${config.home.homeDirectory}/.1password/agent.sock";
+        # Keep WezTerm's mux on Lanyard even when the desktop session exports
+        # a different agent. Lanyard falls back to the local 1Password agent.
+        default_ssh_auth_sock = lib.generators.mkLuaInline ''
+          os.getenv("XDG_RUNTIME_DIR") .. "/lanyard-ssh-agent/agent.sock"
+        '';
       }
       // {
         color_scheme = "Catppuccin Mocha";

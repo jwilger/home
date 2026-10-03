@@ -80,6 +80,6 @@ in
     home.stateVersion = "24.11";
     home.packages = [ (lib.hiPrio remoteHomeManager) ];
     programs.home-manager.enable = true;
-    programs.lanyard-ssh-agent.enable = config.jwilger.hostProfile == "gregor";
+    programs.lanyard-ssh-agent.enable = true;
   };
 }

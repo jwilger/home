@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   programs.ssh = {
     enable = true;
@@ -7,8 +7,7 @@
     settings = {
       "*" = {
         ForwardAgent = true;
-        IdentityAgent =
-          if config.jwilger.hostProfile == "jwilger-t14" then "~/.1password/agent.sock" else "SSH_AUTH_SOCK";
+        IdentityAgent = "SSH_AUTH_SOCK";
       };
     };
   };
