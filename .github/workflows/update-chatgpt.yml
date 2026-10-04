@@ -34,8 +34,11 @@ jobs:
           nix build --impure --no-link --print-build-logs --expr '
             let
               flake = builtins.getFlake (toString ./.);
-              pkgs = import flake.inputs.nixpkgs { system = "x86_64-linux"; config.allowUnfree = true; };
-            in (import ./modules/home/desktop/chatgpt.nix { inherit pkgs; lib = pkgs.lib; }).home.packages
+              home = flake.homeConfigurations."jwilger@gregor";
+              packages = builtins.filter
+                (package: (package.pname or null) == "chatgpt")
+                home.config.home.packages;
+            in assert builtins.length packages == 1; builtins.head packages
           '
       - name: Commit and push update
         if: steps.update.outputs.changed == 'true'
