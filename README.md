@@ -24,16 +24,16 @@ and plugin data are never captured.
 
 ## Hyprland workspaces and layouts
 
-On the T14, **Super+1–9** selects the same logical workspace on the StudioDisplay
-and laptop together, retaining keyboard focus on the initiating monitor. Clicking
-a Noctalia workspace pill also synchronizes the other display. Hyprland still
-needs unique physical workspaces: the StudioDisplay uses IDs 1–9 and eDP-1 uses
-11–19, named `1-laptop` through `9-laptop`. Both bars display the logical 1–9 labels
-in numeric order. The StudioDisplay is matched by description, not its changing
+On the T14, **Super+1–9** selects a logical workspace in the bank belonging to
+the currently focused monitor. Clicking a Noctalia workspace pill likewise
+changes only that monitor's bank. Hyprland still needs unique physical
+workspaces: the StudioDisplay uses IDs 1–9 and eDP-1 uses 11–19, named
+`1-laptop` through `9-laptop`. Both bars display the logical 1–9 labels in
+numeric order. The StudioDisplay is matched by description, not its changing
 DP connector number.
 
 - **Super+Shift+1–9:** move the focused window to that logical workspace on its
-  current monitor, follow it, and switch both displays to that pair
+  current monitor and follow it
 - **Super+[ / Super+]:** move the focused window to the matching workspace on the
   left/right monitor and follow it. **Super+Ctrl+Shift+H/L** and
   **Super+Ctrl+Shift+Left/Right** are aliases. These replace the old bracket
@@ -49,11 +49,9 @@ DP connector number.
 When only one display is connected, numbered shortcuts operate its own bank and
 monitor-transfer shortcuts safely do nothing. Hyprland preserves any windows
 migrated from an unplugged output; their workspaces remain available in the bar
-and return to their assigned display when it reconnects. Automatic synchronization
-leaves a special workspace open on either monitor alone; a deferred pair may remain
-until the next workspace action. An explicit numbered shortcut selects regular
-workspaces using native Hyprland behavior. Gregor keeps its ordinary single-bank
-1–9 workspace configuration.
+and return to their assigned display when it reconnects. Workspace events,
+reloads, startup, and hotplug do not automatically reconcile the two banks.
+Gregor keeps its ordinary single-bank 1–9 workspace configuration.
 
 Home Manager installs the pinned upstream **Hyprland Layout Switcher** plugin
 (`maddingo/hypr-layout-switcher`, version 0.1.1) and enables it in both Noctalia
@@ -64,7 +62,7 @@ is system-owned and must provide the same Lua APIs.
 
 The upstream widget follows the globally focused workspace, even when clicked
 on the other monitor's bar. Layout changes apply to that physical workspace,
-so each side of a pair can use a different layout. They are runtime choices:
+so each monitor can intentionally use a different layout. They are runtime choices:
 reloading Hyprland restores this repository's scrolling defaults. Noctalia's
 locally installed plugin takes precedence over a store-downloaded copy. If a
 hand-copied plugin already occupies `~/.local/share/noctalia/plugins/hypr-layout-switcher`,

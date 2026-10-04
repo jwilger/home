@@ -5,7 +5,7 @@ local count = 0
 local function eq(actual, expected, description)
   assert(actual == expected, (description or "unexpected value") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual))
 end
-local function fixture(paired)
+local function fixture(per_monitor)
   local s = { calls = {}, events = {}, timers = {}, cursor = { x = 42, y = 87 }, windows = {} }
   s.studio = { name = "DP-7", description = "Apple Computer Inc StudioDisplay Serial", focused = true }
   s.laptop = { name = "eDP-1", description = "Built-in display" }
@@ -113,11 +113,7 @@ local function fixture(paired)
     for _, timer in ipairs(ready) do timer.callback() end
   end
   s.control = dofile(source)
-  s.control.setup(paired)
-  if paired then
-    s:emit("hyprland.start")
-    s:run_timers(100)
-  end
+  s.control.setup(per_monitor)
   return s
 end
 local function test(name, fn)
@@ -126,61 +122,57 @@ local function test(name, fn)
   print("ok " .. count .. " - " .. name)
 end
 
-test("all nine logical workspaces pair from either monitor and preserve cursor", function()
+test("numbered workspace selection stays on the invoking monitor bank", function()
   for _, side in ipairs({ "studio", "laptop" }) do
     for n = 1, 9 do
       local s = fixture(true)
       s.active_monitor = s[side]
       s.control.workspace(n)
-      eq(s.studio.active_workspace.id, n)
-      eq(s.laptop.active_workspace.id, n + 10)
+      eq(s.studio.active_workspace.id, side == "studio" and n or 1)
+      eq(s.laptop.active_workspace.id, side == "laptop" and n + 10 or 11)
       eq(s.active_monitor, s[side])
-      eq(s.cursor.x, 42); eq(s.cursor.y, 87)
-      assert(#s.calls <= 3, "recursive workspace events must not loop")
+      eq(#s.calls, n == 1 and 0 or 1)
     end
   end
 end)
 
-test("bar click synchronizes peer and returns focus to clicked monitor", function()
+test("workspace events do not install automatic synchronization or timers", function()
   local s = fixture(true)
   s:activate(14)
-  eq(#s.calls, 0, "workspace event synchronization must be deferred")
-  s:run_timers(1)
-  eq(s.studio.active_workspace.id, 4); eq(s.laptop.active_workspace.id, 14)
+  eq(s.studio.active_workspace.id, 1)
+  eq(s.laptop.active_workspace.id, 14)
   eq(s.active_monitor, s.laptop)
-  eq(#s.calls, 3)
+  eq(#s.calls, 0)
+  eq(#s.timers, 0)
 end)
 
-test("pair sync explicitly restores an already-active empty origin monitor", function()
+test("already-active workspace selection does not touch the peer monitor", function()
   local s = fixture(true)
-  local peer_window = s:add_window(14)
-  s.window = nil
   s.active_monitor = s.studio
   s.studio.active_workspace = s.workspaces[4]
   s.control.workspace(4)
-  eq(s.studio.active_workspace.id, 4); eq(s.laptop.active_workspace.id, 14)
+  eq(s.studio.active_workspace.id, 4); eq(s.laptop.active_workspace.id, 11)
   eq(s.active_monitor, s.studio)
-  eq(s.window, nil, "keyboard focus must not remain on the peer window")
-  eq(s.calls[2].args.monitor, s.studio.name)
-  assert(peer_window ~= s.window)
+  eq(#s.calls, 0)
 end)
 
-test("already paired activation does not steal a window's focus", function()
+test("workspace selection preserves the focused window on its monitor", function()
   local s = fixture(true)
   local window = s:add_window(1)
-  s:emit("workspace.active", s.workspaces[1])
-  s:run_timers(1)
+  s.control.workspace(1)
   eq(#s.calls, 0); eq(s.window, window)
 end)
 
-test("numbered window move follows same monitor bank and synchronizes both", function()
+test("numbered window move stays in the window's monitor bank", function()
   for _, id in ipairs({ 1, 11 }) do
     local s = fixture(true)
     local window = s:add_window(id)
     s.control.move_to_workspace(8)
     eq(window.workspace.id, id == 1 and 8 or 18)
-    eq(s.studio.active_workspace.id, 8); eq(s.laptop.active_workspace.id, 18)
+    eq(s.studio.active_workspace.id, id == 1 and 8 or 1)
+    eq(s.laptop.active_workspace.id, id == 11 and 18 or 11)
     eq(s.window, window); eq(s.active_monitor, window.monitor)
+    eq(#s.calls, 1)
   end
 end)
 
@@ -216,110 +208,18 @@ test("external-only and Gregor retain ordinary numeric shortcuts", function()
   eq(s.calls[#s.calls].args.monitor, "l")
 end)
 
-test("hotplug resynchronizes after persistent relocation, preserving active number", function()
+test("setup only selects a bank and registers no automatic lifecycle handlers", function()
   local s = fixture(true)
-  s.monitors = { s.laptop }; s.active_monitor = s.laptop
-  s.control.workspace(7)
-  s.monitors = { s.studio, s.laptop }
-  s:emit("monitor.added", s.studio)
-  eq(s.studio.active_workspace.id, 1, "must defer past persistent creation")
-  s:run_timers()
-  eq(s.studio.active_workspace.id, 7); eq(s.laptop.active_workspace.id, 17)
-  eq(s.active_monitor, s.laptop)
-end)
-
-test("foreign and special workspaces are left alone", function()
-  local s = fixture(true)
-  s:emit("workspace.active", { id = 42, monitor = s.studio })
-  s:emit("workspace.active", { id = -99, special = true, monitor = s.studio })
-  s:emit("workspace.active", { id = 3, monitor = s.laptop }) -- migrated bank
-  eq(#s.calls, 0)
-  s.special = { id = -99, special = true }
-  s:emit("config.reloaded"); s:run_timers(); eq(#s.calls, 0)
-end)
-
-test("automatic reconciliation preserves a special open on the nonfocused peer", function()
-  local s = fixture(true)
-  s.active_monitor = s.laptop
-  s.laptop.active_workspace = s.workspaces[11]
-  s.studio.active_workspace = s.workspaces[2]
-  s.studio.active_special_workspace = { id = -99, special = true }
-  s:emit("config.reloaded")
-  s:run_timers(100)
-  eq(#s.calls, 0)
-  assert(s.studio.active_special_workspace, "peer special must remain open")
-end)
-
-test("config verification without an active monitor does not create a timer", function()
-  local s = fixture(true)
-  s.monitors = {}
-  s.active_monitor = nil
-  s:emit("config.reloaded")
+  eq(next(s.events), nil)
   eq(#s.timers, 0)
-  eq(#s.calls, 0)
 end)
 
-test("disconnect migration events wait for removal and restore the surviving bank", function()
-  local s = fixture(true)
-  s.control.workspace(7)
-  local stable_calls = #s.calls
-  local laptop_window = s:add_window(17)
-  s.active_monitor = s.studio
-  s.studio.active_workspace = s.workspaces[7]
-
-  -- onDisconnect changes the disabled monitor's workspace while it is still in
-  -- get_monitors(), then migrates workspaces, and only then erases the monitor.
-  s.studio.active_workspace = s.workspaces[2]
-  s:emit("workspace.active", s.workspaces[2])
-  eq(#s.calls, stable_calls, "migration must not synchronously focus either output")
-  s.workspaces[2].monitor = s.laptop
-  s.active_monitor = s.laptop
-  s.laptop.active_workspace = s.workspaces[2]
-  s.window = laptop_window
-  s:emit("workspace.active", s.workspaces[2])
-  s.monitors = { s.laptop }
-  s:emit("monitor.removed", s.studio)
-  s:run_timers(1)
-  eq(#s.calls, stable_calls, "stale migration callbacks must be invalidated")
-  s:run_timers(100)
-  eq(s.laptop.active_workspace.id, 17)
-  eq(s.window, laptop_window, "focused window on the stable bank must survive")
-  eq(s.cursor.x, 42); eq(s.cursor.y, 87)
-end)
-
-test("newer bar activation invalidates an older deferred workspace event", function()
-  local s = fixture(true)
-  s:activate(14)
-  s:activate(3)
-  s:run_timers(1)
-  eq(s.studio.active_workspace.id, 3); eq(s.laptop.active_workspace.id, 13)
-  eq(s.active_monitor, s.studio)
-  eq(#s.calls, 3, "only the newest activation may synchronize")
-end)
-
-test("reattach identifies StudioDisplay by description despite connector and order changes", function()
-  local s = fixture(true)
-  s.monitors = { s.laptop }; s.active_monitor = s.laptop
-  s.control.workspace(6)
-  local replacement = {
-    name = "DP-42", description = "Apple Computer Inc StudioDisplay Different serial",
-    active_workspace = s.workspaces[1],
-  }
-  for n = 1, 9 do s.workspaces[n].monitor = replacement end
-  s.monitors = { s.laptop, replacement }
-  s:emit("monitor.added", replacement)
-  s:run_timers(100)
-  eq(replacement.active_workspace.id, 6); eq(s.laptop.active_workspace.id, 16)
-  eq(s.active_monitor, s.laptop)
-end)
-
-test("failed synchronization releases recursion guard", function()
-  local s = fixture(true)
-  s.fail_next = true
-  local ok = pcall(s.control.workspace, 2)
-  eq(ok, false)
-  s.control.workspace(3)
-  eq(s.studio.active_workspace.id, 3); eq(s.laptop.active_workspace.id, 13)
+test("setup without per-monitor banks keeps ordinary numeric workspaces", function()
+  local s = fixture(false)
+  s.control.workspace(8)
+  eq(s.studio.active_workspace.id, 8)
+  eq(#s.timers, 0)
+  eq(next(s.events), nil)
 end)
 
 test("dwindle and master navigate and move natively without scrolling dispatch", function()
@@ -376,7 +276,7 @@ end)
 
 test("setup is idempotent", function()
   local s = fixture(true); s.control.setup(true)
-  eq(#s.events["workspace.active"], 1)
+  eq(next(s.events), nil)
 end)
 
 print("1.." .. count)
