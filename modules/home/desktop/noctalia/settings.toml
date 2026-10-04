@@ -170,3 +170,16 @@ unit = "imperial"
 
 [widget.control-center]
 custom_image = ""
+
+[bar.main]
+center = [ "spacer_8", "date", "clock", "spacer_2", "privacy", "spacer_3", "media", "spacer_7" ]
+
+[widget.active_window]
+capsule = true
+min_length = 50
+
+[widget.spacer_7]
+type = "spacer"
+
+[widget.spacer_8]
+type = "spacer"

@@ -17,6 +17,13 @@ for entry in ("widget.luau", "service.luau"):
     assert (plugin / entry).is_file()
 for document in (config, state):
     assert plugin_id in document["plugins"]["enabled"]
+assert state["bar"]["main"]["center"] == [
+    "spacer_8", "date", "clock", "spacer_2", "privacy", "spacer_3", "media", "spacer_7"
+]
+state_widgets = state["widget"]
+assert state_widgets["active_window"] == {"capsule": True, "min_length": 50}
+for spacer in ("spacer_7", "spacer_8"):
+    assert state_widgets[spacer] == {"type": "spacer"}
 assert config["bar"]["main"]["start"] == [
     "spacer", "workspaces", "spacer_5", "layout_switcher", "spacer_6", "active_window"
 ]

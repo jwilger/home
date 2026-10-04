@@ -14,7 +14,7 @@ let
     ];
   };
   exec = keys: command: bind keys "hl.dsp.exec_cmd(${builtins.toJSON command})";
-  pairedWorkspaces = config.jwilger.hostProfile == "jwilger-t14";
+  perMonitorWorkspaces = config.jwilger.hostProfile == "jwilger-t14";
   control = keys: action: bind keys ''function() require("desktop-controls").${action} end'';
   workspaceRules = lib.concatMap (
     number:
@@ -24,14 +24,14 @@ let
           {
             workspace = builtins.toString number;
             layout = "scrolling";
-            monitor = if pairedWorkspaces then "desc:Apple Computer Inc StudioDisplay" else "DP-3";
+            monitor = if perMonitorWorkspaces then "desc:Apple Computer Inc StudioDisplay" else "DP-3";
             persistent = true;
             default = number == 1;
           }
         ];
       }
     ]
-    ++ lib.optional pairedWorkspaces {
+    ++ lib.optional perMonitorWorkspaces {
       _args = [
         {
           workspace = builtins.toString (number + 10);
@@ -188,7 +188,7 @@ in
           wrap_swapcol = false;
         };
 
-        # Native directional moves at a layout edge reach the paired monitor.
+        # Native directional moves at a layout edge reach the other monitor.
         binds.window_direction_monitor_fallback = true;
         animations.enabled = true;
         cursor = {
@@ -408,7 +408,7 @@ in
       -- first frame. The declarative colors above remain the safe fallback
       -- until Noctalia has written its current palette.
       package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
-      require("desktop-controls").setup(${lib.boolToString pairedWorkspaces})
+      require("desktop-controls").setup(${lib.boolToString perMonitorWorkspaces})
       local noctalia_ok, noctalia_theme = pcall(require, "noctalia")
       if noctalia_ok then
         noctalia_theme.apply_theme()
