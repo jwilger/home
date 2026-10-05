@@ -90,6 +90,9 @@
               home = {
                 username = "jwilger";
                 homeDirectory = "/home/jwilger";
+                packages = pkgs.lib.optionals (hostProfile == "jwilger-t14") [
+                  hyprlandPointerAdapter
+                ];
               };
             }
           ];
