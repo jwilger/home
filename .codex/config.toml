@@ -1,2 +1,1 @@
-[plugins."development-system@ai-plugins"]
-enabled = false
+# Plugin enablement inherits the user's global Codex configuration.

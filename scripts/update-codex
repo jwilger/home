@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Update the Codex pin only after validating a stable release and its bundle."""
+import argparse
+import base64
+import hashlib
+import json
+import pathlib
+import re
+import subprocess
+import tarfile
+import tempfile
+
+ASSET = 'codex-package-x86_64-unknown-linux-musl.tar.gz'
+CHECKSUMS = 'codex-package_SHA256SUMS'
+
+
+def release_assets(release):
+    tag = release['tag_name']
+    if release.get('prerelease') is not False or release.get('draft') is not False:
+        raise ValueError('Expected a published stable Codex release')
+    match = re.fullmatch(r'rust-v([0-9]+\.[0-9]+\.[0-9]+)', tag)
+    if not match:
+        raise ValueError(f'Unexpected Codex release tag: {tag!r}')
+    assets = {}
+    for name in [ASSET, CHECKSUMS]:
+        matches = [asset for asset in release['assets'] if asset['name'] == name]
+        expected = f'https://github.com/openai/codex/releases/download/{tag}/{name}'
+        if len(matches) != 1 or matches[0]['browser_download_url'] != expected:
+            raise ValueError(f'Expected exactly one official release asset: {name}')
+        assets[name] = expected
+    return match[1], assets
+
+
+def update(release, archive, checksums, module):
+    version, _ = release_assets(release)
+    with archive.open('rb') as source:
+        digest = hashlib.file_digest(source, 'sha256').digest()
+    matches = re.findall(r'(?m)^([a-fA-F0-9]{64})\s+\*?' + re.escape(ASSET) + r'$', checksums.read_text())
+    if len(matches) != 1 or matches[0].lower() != digest.hex():
+        raise ValueError('Codex bundle SHA-256 does not match the upstream checksum')
+    with tarfile.open(archive, 'r:gz') as bundle:
+        for path in ['bin/codex', 'bin/codex-code-mode-host']:
+            member = bundle.getmember(path)
+            if not member.isfile() or not member.mode & 0o111:
+                raise ValueError(f'Missing executable in Codex bundle: {path}')
+        manifest = json.load(bundle.extractfile('codex-package.json'))
+    expected = {'layoutVersion': 1, 'version': version, 'target': 'x86_64-unknown-linux-musl',
+                'variant': 'codex', 'entrypoint': 'bin/codex', 'resourcesDir': 'codex-resources', 'pathDir': 'codex-path'}
+    if any(manifest.get(key) != value for key, value in expected.items()):
+        raise ValueError('Codex bundle metadata does not match the selected release/layout')
+    original = module.read_text()
+    sri = 'sha256-' + base64.b64encode(digest).decode()
+    updated, versions = re.subn(r'(?m)^(\s*version = ")[^"]+(";)$',
+                                lambda match: match[1] + version + match[2], original)
+    updated, hashes = re.subn(r'(?m)^(\s*hash = ")[^"]+(";)$',
+                              lambda match: match[1] + sri + match[2], updated)
+    if versions != 1 or hashes != 1:
+        raise ValueError('Expected exactly one Codex version and source hash')
+    if updated != original:
+        module.write_text(updated)
+        print(f'Updated Codex to {version} ({sri})')
+    else:
+        print(f'Codex {version} is already current')
+
+
+def download(url, target):
+    subprocess.run(['curl', '--fail', '--location', '--retry', '3', '--connect-timeout', '30',
+                    '--max-time', '600', '--output', str(target), url], check=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--module', type=pathlib.Path,
+                        default=pathlib.Path(__file__).resolve().parents[1] / 'modules/home/codex/package.nix')
+    parser.add_argument('--release-json', type=pathlib.Path)
+    parser.add_argument('--archive', type=pathlib.Path)
+    parser.add_argument('--checksums', type=pathlib.Path)
+    args = parser.parse_args()
+    if any([args.release_json, args.archive, args.checksums]):
+        if not all([args.release_json, args.archive, args.checksums]):
+            parser.error('Offline validation requires --release-json, --archive and --checksums')
+        update(json.loads(args.release_json.read_text()), args.archive, args.checksums, args.module)
+        return
+    with tempfile.TemporaryDirectory(prefix='codex-update-') as directory:
+        root = pathlib.Path(directory)
+        metadata = root / 'release.json'
+        download('https://api.github.com/repos/openai/codex/releases/latest', metadata)
+        release = json.loads(metadata.read_text())
+        _, assets = release_assets(release)
+        archive, checksums = root / ASSET, root / CHECKSUMS
+        download(assets[ASSET], archive)
+        download(assets[CHECKSUMS], checksums)
+        update(release, archive, checksums, args.module)
+
+
+if __name__ == '__main__':
+    main()

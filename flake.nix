@@ -115,7 +115,10 @@
         "jwilger@jwilger-t14" = mkHome "jwilger-t14";
       };
 
-      packages.${system}.hyprland-pointer-adapter = hyprlandPointerAdapter;
+      packages.${system} = {
+        hyprland-pointer-adapter = hyprlandPointerAdapter;
+        codex = self.homeConfigurations."jwilger@gregor".config.programs.codex.package;
+      };
 
       checks.${system} = {
         hyprland-pointer-adapter =
@@ -153,6 +156,18 @@
           ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_control_probe.py'
           touch "$out"
         '';
+        codex-configuration =
+          let
+            python = pkgs.python312.withPackages (p: [
+              p.tomlkit
+              p.ruamel-yaml
+            ]);
+          in
+          pkgs.runCommand "check-codex-configuration" { } ''
+            export PYTHONDONTWRITEBYTECODE=1
+            ${python}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_codex_*.py'
+            touch "$out"
+          '';
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
         hindsight-integration =
@@ -192,6 +207,7 @@
                 test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
                 test ! -e "$homeFiles/.codex/config.toml"
                 test ! -e "$homeFiles/.codex/hooks.json"
+                test -f "$homeFiles/.config/systemd/user/serena-runtime-install.service"
               done
               touch "$out"
             '';

@@ -1,4 +1,4 @@
-name: Update ChatGPT desktop
+name: Update Codex CLI
 
 on:
   schedule:
@@ -21,30 +21,25 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
       - uses: cachix/install-nix-action@v31
-      - name: Download and update version and hash
+      - name: Validate and update Codex version and hash
         id: update
         run: |
-          python3 scripts/update-chatgpt
-          if ! git diff --quiet -- modules/home/desktop/chatgpt.nix; then
+          python3 -m unittest discover -s tests -p test_codex_updater.py
+          python3 scripts/update-codex
+          if ! git diff --quiet -- modules/home/codex/package.nix; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
-      - name: Build updated ChatGPT package
+      - name: Build and verify updated Codex package
         if: steps.update.outputs.changed == 'true'
         run: |
-          nix build --impure --no-link --print-build-logs --expr '
-            let
-              flake = builtins.getFlake (toString ./.);
-              home = flake.homeConfigurations."jwilger@gregor";
-              packages = builtins.filter
-                (package: (package.pname or null) == "chatgpt")
-                home.config.home.packages;
-            in assert builtins.length packages == 1; builtins.head packages
-          '
+          package=$(nix build .#codex --no-link --print-out-paths --print-build-logs)
+          "$package/bin/codex" --version
+          test -x "$package/bin/codex-code-mode-host"
       - name: Commit and push update
         if: steps.update.outputs.changed == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add modules/home/desktop/chatgpt.nix
-          git commit -m 'chore: update ChatGPT desktop'
+          git add modules/home/codex/package.nix
+          git commit -m 'chore: update Codex CLI'
           git push

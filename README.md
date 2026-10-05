@@ -79,6 +79,55 @@ fresh login, also verify both monitors, bar clicks, window transfers, docking,
 and each layout in the live session; simulated tests cannot prove compositor
 animation, actual monitor timing, or rendered bar geometry.
 
+## Codex CLI and global agent tools
+
+Home Manager installs the pinned official Codex CLI bundle on both profiles,
+including its companion runtimes. The CLI continues to use `~/.codex`; ChatGPT
+Desktop keeps its separate login and configuration. App connectors and remote
+plugins remain enabled. Installed account plugins are shared with ChatGPT, so
+individual removals must consider non-coding uses too. Native local plugins
+remain available; Home Manager does not override individual plugin enablement.
+
+Activation runs `reconcile-codex`, which reapplies managed defaults using atomic
+replacement for each changed file, preserving trusted projects, other local
+settings, login and session state.
+Changed files and the previous `~/.local/bin/codex` entry receive timestamped
+`.home-manager-backup.*` backups. Configuration stays writable for Codex and
+Hindsight. Malformed input is rejected before configuration files are changed.
+
+RTK uses a native global Codex hook to filter supported shell output and coexists
+with Hindsight hooks. Use `rtk proxy <command>` for raw output with tracking, or
+`RTK_DISABLED=1 <command>` to bypass automatic rewriting. `rtk gain` reports
+estimated shell-output savings, not whole-session cost savings.
+
+Serena uses a pinned UV runtime prepared by `serena-runtime-install.service`.
+Its global MCP selects the current working directory in Codex context and trusts
+projects and worktrees under `~/src`. Language servers still come from project
+environments; launch Codex inside the project's development shell. The dashboard
+never opens automatically. First installation requires network access; afterward
+the pinned runtime is cached.
+
+Context7 is a global stdio MCP. Its launcher uses 1Password account
+`QLLIV23RKJEOLAJMPOKP3NDMSU` to resolve `op://Employee/Context7/credential` only
+inside the MCP process. Unlock the team account in 1Password when prompted.
+The credential is never written to Codex configuration or the Nix store.
+
+The `Update Codex CLI` Action runs nightly at 09:23 UTC or by manual dispatch.
+It validates the latest stable official release, its bundle metadata and upstream
+checksum, then updates the version/hash together and builds the package before
+committing to the default branch. Unchanged releases produce no commit. It shares
+write concurrency with the ChatGPT updater. The workflow becomes active after
+publication; apply updated pins with the usual Home Manager rebuild. Local updates
+can be prepared with `python3 scripts/update-codex`; review the diff before commit.
+The former first-login installer and weekly updater are retired.
+
+Code mode and code-mode-only routing are enabled in the CLI. The agent can
+compose tool calls and deterministic calculations in JavaScript and return
+selected results through `exec`/`wait`. These flags are experimental in Codex
+0.160.0; the packaged companion runtime provides execution.
+
+Restart CLI sessions after activation to load the managed defaults and hooks.
+
 ## ChatGPT desktop updates
 
 The `Update ChatGPT desktop` GitHub Action runs nightly at 09:23 UTC and can

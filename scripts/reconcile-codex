@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Reapply Home Manager-owned defaults without owning agent runtime state."""
+import argparse
+import copy
+import fcntl
+import io
+import json
+import os
+import pathlib
+import re
+import shutil
+import tempfile
+import time
+
+import tomlkit
+from ruamel.yaml import YAML
+
+
+def backup(path):
+    target = path.with_name(f'{path.name}.home-manager-backup.{time.time_ns()}')
+    if path.is_symlink():
+        target.symlink_to(os.readlink(path))
+    else:
+        shutil.copy2(path, target)
+    return target
+
+
+def write(path, content):
+    if path.exists() and path.read_text() == content and not path.is_symlink():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.exists() or path.is_symlink():
+        backup(path)
+    fd, temporary = tempfile.mkstemp(prefix=f'.{path.name}.', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(content)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def merge(target, defaults):
+    for key, value in defaults.items():
+        if isinstance(value, dict):
+            if key not in target or not isinstance(target[key], dict):
+                target[key] = tomlkit.table()
+            merge(target[key], value)
+        else:
+            target[key] = value
+
+
+def reconcile(home, defaults):
+    codex = home / '.codex'
+    codex.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (codex / '.home-manager.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        config_path = codex / 'config.toml'
+        config = tomlkit.parse(config_path.read_text() if config_path.exists() else '')
+        settings = copy.deepcopy(defaults['settings'])
+        servers = settings.pop('mcp_servers', {})
+        merge(config, settings)
+        if servers:
+            if 'mcp_servers' not in config:
+                config['mcp_servers'] = tomlkit.table()
+            for name, server in servers.items():
+                # A managed server owns its transport; never retain an old URL
+                # alongside a new stdio command (or vice versa).
+                config['mcp_servers'][name] = server
+        hooks_path = codex / 'hooks.json'
+        hooks = json.loads(hooks_path.read_text()) if hooks_path.exists() else {'hooks': {}}
+        if not isinstance(hooks, dict) or not isinstance(hooks.get('hooks', {}), dict):
+            raise ValueError('Expected an object containing a hooks object')
+        entries = hooks.setdefault('hooks', {}).get('PreToolUse', [])
+        if not isinstance(entries, list):
+            raise ValueError('Expected PreToolUse hooks to be a list')
+        retained = []
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get('hooks'), list):
+                raise ValueError('Expected each PreToolUse entry to contain a hooks list')
+            item = copy.deepcopy(entry)
+            item['hooks'] = [hook for hook in item['hooks'] if not re.search(
+                r'(?:^|[/\\\s\"])rtk(?:\"|\s)+hook\s+codex(?:\s|$)', hook.get('command', ''))]
+            if item['hooks']:
+                retained.append(item)
+        retained.append({'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': defaults['rtk_command']}]})
+        hooks['hooks']['PreToolUse'] = retained
+
+        yaml = YAML()
+        yaml.preserve_quotes = True
+        serena_path = home / '.serena/serena_config.yml'
+        serena = yaml.load(serena_path.read_text()) if serena_path.exists() else {}
+        if serena is None:
+            serena = {}
+        if not isinstance(serena, dict):
+            raise ValueError('Expected Serena configuration to be a mapping')
+        serena.update(defaults['serena_settings'])
+        trust = serena.setdefault('trusted_project_path_patterns', [])
+        if not isinstance(trust, list):
+            raise ValueError('Expected Serena trust patterns to be a list')
+        for pattern in defaults['serena_trust']:
+            if pattern not in trust:
+                trust.append(pattern)
+        stream = io.StringIO()
+        yaml.dump(serena, stream)
+
+        # Validate all input files before changing any of them.
+        write(config_path, tomlkit.dumps(config))
+        write(hooks_path, json.dumps(hooks, indent=2) + '\n')
+        write(serena_path, stream.getvalue())
+        binary = home / '.local/bin/codex'
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        executable = defaults['codex_executable']
+        if not binary.is_symlink() or os.readlink(binary) != executable:
+            if binary.exists() or binary.is_symlink():
+                backup(binary)
+            temporary = binary.with_name('.codex.home-manager-new')
+            temporary.unlink(missing_ok=True)
+            temporary.symlink_to(executable)
+            os.replace(temporary, binary)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--home', type=pathlib.Path, required=True)
+    parser.add_argument('--defaults', type=pathlib.Path, required=True)
+    args = parser.parse_args()
+    try:
+        reconcile(args.home, json.loads(args.defaults.read_text()))
+    except (ValueError, OSError, TypeError, KeyError) as error:
+        parser.exit(1, f'Codex configuration reconciliation failed: {error}\n')
+
+
+if __name__ == '__main__':
+    main()

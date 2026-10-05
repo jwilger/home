@@ -1,8 +1,13 @@
-{ pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   retentionDays = 7;
   dryRun = false;
-  codex = "/home/jwilger/.local/bin/codex";
+  codex = lib.getExe config.programs.codex.package;
   codexSessionPrune = pkgs.writeShellApplication {
     name = "codex-session-prune";
     runtimeInputs = [

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   homeDirectory = config.home.homeDirectory;
   hindsightDirectory = "${homeDirectory}/.hindsight";
@@ -11,7 +16,10 @@ let
   postgresPort = "5436";
   startPostgres = pkgs.writeShellApplication {
     name = "start-hindsight-postgres";
-    runtimeInputs = [ postgres pkgs.coreutils ];
+    runtimeInputs = [
+      postgres
+      pkgs.coreutils
+    ];
     text = ''
       data_dir=${lib.escapeShellArg "${postgresDirectory}/data"}
       socket_dir=${lib.escapeShellArg postgresSocket}
@@ -26,7 +34,10 @@ let
   };
   preparePostgres = pkgs.writeShellApplication {
     name = "prepare-hindsight-postgres";
-    runtimeInputs = [ postgres pkgs.coreutils ];
+    runtimeInputs = [
+      postgres
+      pkgs.coreutils
+    ];
     text = ''
       socket_dir=${lib.escapeShellArg postgresSocket}
       for _ in {1..60}; do
@@ -46,7 +57,10 @@ let
   };
   patchCodexHooks = pkgs.writeShellApplication {
     name = "patch-hindsight-codex-hooks";
-    runtimeInputs = [ pkgs.coreutils pkgs.jq ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+    ];
     text = ''
       # Git's log.showSignature adds verification text to --format=%aI, which
       # Hindsight sends as an ISO timestamp. Confine the override to its hooks.
@@ -74,7 +88,7 @@ let
     name = "install-hindsight-codex";
     runtimeInputs = [ pkgs.nodejs_22 ];
     text = ''
-      codex_bin="$HOME/.local/bin/codex"
+      codex_bin=${lib.escapeShellArg (lib.getExe config.programs.codex.package)}
       if [[ ! -x "$codex_bin" ]]; then
         echo "Codex CLI is not installed yet." >&2
         exit 1
@@ -88,18 +102,23 @@ let
   };
   launchDaemon = pkgs.writeShellApplication {
     name = "launch-hindsight-daemon";
-    runtimeInputs = [ pkgs.nodejs_22 pkgs.uv ];
+    runtimeInputs = [
+      pkgs.nodejs_22
+      pkgs.uv
+    ];
     text = ''
       # uv-managed Python wheels need these native libraries on NixOS.
-      export LD_LIBRARY_PATH=${lib.makeLibraryPath [
-        pkgs.stdenv.cc.cc.lib
-        pkgs.zlib
-        pkgs.zstd
-        pkgs.lz4
-        pkgs.openssl
-        pkgs.krb5
-        pkgs.xz
-      ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+      export LD_LIBRARY_PATH=${
+        lib.makeLibraryPath [
+          pkgs.stdenv.cc.cc.lib
+          pkgs.zlib
+          pkgs.zstd
+          pkgs.lz4
+          pkgs.openssl
+          pkgs.krb5
+          pkgs.xz
+        ]
+      }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
       if [[ "$HINDSIGHT_API_LLM_API_KEY" == REPLACE_WITH_OPENAI_API_KEY ]]; then
         echo "Replace the Hindsight OpenAI API key placeholder in 1Password." >&2
         exit 3
@@ -109,7 +128,10 @@ let
   };
   startDaemon = pkgs.writeShellApplication {
     name = "start-hindsight-daemon";
-    runtimeInputs = [ pkgs.curl pkgs.nodejs_22 ];
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.nodejs_22
+    ];
     text = ''
       if curl --fail --silent --max-time 3 http://127.0.0.1:9077/health > /dev/null; then
         exit 0
@@ -132,7 +154,14 @@ let
   };
   importCodex = pkgs.writeShellApplication {
     name = "import-hindsight-codex-history";
-    runtimeInputs = [ pkgs.coreutils pkgs.curl pkgs.git pkgs.jq pkgs.nodejs_22 pkgs.ripgrep ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.git
+      pkgs.jq
+      pkgs.nodejs_22
+      pkgs.ripgrep
+    ];
     text = ''
       # Keep signature verification banners out of git log's ISO date output.
       export GIT_CONFIG_COUNT=1
@@ -168,7 +197,7 @@ let
       cleanup_import() {
         import_status=$?
         rm -f -- "$import_log"
-        if ! ${lib.getExe patchCodexHooks}; then
+        if ! ${lib.getExe patchCodexHooks} || ! ${lib.getExe config.jwilger.codex.reconcile}; then
           echo "Could not reconcile Hindsight Codex hooks after import." >&2
           import_status=1
         fi
@@ -244,12 +273,11 @@ in
     hindsight-codex-install = {
       Unit = {
         Description = "Install and reconcile Hindsight Codex hooks and MCP";
-        Wants = [ "codex-cli-install.service" ];
-        After = [ "codex-cli-install.service" ];
       };
       Service = {
         Type = "oneshot";
         ExecStart = lib.getExe installCodex;
+        ExecStartPost = lib.getExe config.jwilger.codex.reconcile;
         TimeoutStartSec = "10min";
         Restart = "on-failure";
         RestartSec = "30min";
@@ -288,7 +316,10 @@ in
     hindsight-codex-history-import = {
       Unit = {
         Description = "Import historical Codex sessions into Hindsight";
-        After = [ "hindsight-codex-install.service" "hindsight-daemon-start.service" ];
+        After = [
+          "hindsight-codex-install.service"
+          "hindsight-daemon-start.service"
+        ];
         ConditionPathExists = "!%h/.local/state/hindsight/codex-history-imported-v2";
       };
       Service = {

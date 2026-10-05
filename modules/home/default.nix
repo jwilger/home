@@ -36,6 +36,7 @@ in
     ./aws.nix
     ./bat.nix
     ./btop.nix
+    ./codex
     ./codex-session-retention.nix
     ./development-storage.nix
     ./developer-cli-installers.nix

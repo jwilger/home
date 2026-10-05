@@ -87,7 +87,6 @@ in
         nodejs_22 # Claude Code hooks
         openssl
         ripgrep
-        rtk # reduce token use by llm cli tools
         statix
         tdf # cli pdf viewer
         tree
