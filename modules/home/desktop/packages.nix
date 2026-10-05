@@ -15,6 +15,7 @@ in
     ]
     ++ lib.optionals isX86_64Linux [
       gpu-screen-recorder
+      signal-desktop
     ]
     ++ lib.optionals (isX86_64Linux && config.jwilger.hostProfile == "gregor") [
       discord # chat for games
