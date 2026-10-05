@@ -28,7 +28,8 @@ Respect an explicit approval rejection. Continue unaffected work and safe altern
   them automatically. Use `rtk proxy <command>` when full output is needed.
 - Use Context7 for targeted library documentation, specifying the library ID and
   version when known. Retrieve only the material needed for the current question.
-- Use code mode (`exec`/`wait`) to compose tool calls and deterministic calculations.
+- When available, use code mode (`exec`/`wait`) to compose tool calls and
+  deterministic calculations. Otherwise use the available ordinary tools.
   Batch independent reads, sequence dependent calls and mutations, and inspect
   every result. Filter intermediate data before emitting selected evidence.
 - Keep complete logs and large artifacts on disk; return paths, counts, selected

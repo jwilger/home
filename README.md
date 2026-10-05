@@ -127,10 +127,10 @@ publication; apply updated pins with the usual Home Manager rebuild. Local updat
 can be prepared with `python3 scripts/update-codex`; review the diff before commit.
 The former first-login installer and weekly updater are retired.
 
-Code mode and code-mode-only routing are enabled in the CLI. The agent can
-compose tool calls and deterministic calculations in JavaScript and return
-selected results through `exec`/`wait`. These flags are experimental in Codex
-0.160.0; the packaged companion runtime provides execution.
+Code mode uses Codex's upstream defaults. Activation removes the former
+`code_mode` and `code_mode_only` overrides from the writable configuration
+instead of forcing either value. Global instructions suggest code-mode
+orchestration only when that capability is available.
 
 Restart CLI sessions after activation to load the managed defaults and hooks.
 

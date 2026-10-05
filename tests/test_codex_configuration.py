@@ -22,6 +22,7 @@ class ConfigurationTest(unittest.TestCase):
             'settings': {'model': 'test-model', 'features': {'hooks': True, 'apps': True, 'remote_plugin': True},
                          'apps': {'_default': {'enabled': True}},
                          'mcp_servers': {'serena': {'command': '/managed/serena', 'args': ['--context', 'codex']}}},
+            'retired_features': ['code_mode', 'code_mode_only'],
             'rtk_command': '/managed/rtk hook codex',
             'serena_settings': {'web_dashboard_open_on_launch': False},
             'serena_trust': [str(self.home / 'src') + '/**'],
@@ -65,6 +66,17 @@ class ConfigurationTest(unittest.TestCase):
         self.assertTrue(servers['node_repl'].get('enabled', True))
         self.assertEqual(servers['hindsight']['command'], 'node')
         self.assertNotIn('enabled', servers['custom'])
+
+    def test_removes_former_managed_feature_overrides_without_changing_other_features(self):
+        config = self.codex / 'config.toml'
+        config.write_text('[features]\ncode_mode = true\ncode_mode_only = true\nmemories = true\n')
+        result = self.reconcile()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        features = tomllib.loads(config.read_text())['features']
+        self.assertNotIn('code_mode', features)
+        self.assertNotIn('code_mode_only', features)
+        self.assertTrue(features['memories'])
+        self.assertTrue(features['hooks'])
 
     def test_hooks_and_configuration_are_idempotent(self):
         hooks = self.codex / 'hooks.json'

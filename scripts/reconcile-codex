@@ -61,6 +61,10 @@ def reconcile(home, defaults):
         settings = copy.deepcopy(defaults['settings'])
         servers = settings.pop('mcp_servers', {})
         merge(config, settings)
+        # Dropping an owned default alone would preserve the old writable
+        # override. Retire it explicitly so the upstream default takes effect.
+        for feature in defaults.get('retired_features', []):
+            config.get('features', {}).pop(feature, None)
         if servers:
             if 'mcp_servers' not in config:
                 config['mcp_servers'] = tomlkit.table()

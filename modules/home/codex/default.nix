@@ -70,8 +70,6 @@ let
         tui.status_line_use_colors = true;
         features = {
           hooks = true;
-          code_mode = true;
-          code_mode_only = true;
           apps = true;
           remote_plugin = true;
         };
@@ -97,6 +95,10 @@ let
           };
         };
       };
+      retired_features = [
+        "code_mode"
+        "code_mode_only"
+      ];
       rtk_command = "${lib.getExe rtk} hook codex";
       codex_executable = lib.getExe codex;
       serena_settings = {
