@@ -88,6 +88,12 @@ plugins remain enabled. Installed account plugins are shared with ChatGPT, so
 individual removals must consider non-coding uses too. Native local plugins
 remain available; Home Manager does not override individual plugin enablement.
 
+Home Manager also manages `~/.codex/AGENTS.md`, preserving the global goal and
+sandbox-recovery rules and adding concise guidance for Serena, RTK, Context7,
+and code mode. Edit `modules/home/codex/AGENTS.md` to change these instructions.
+When migrating an existing unmanaged file, activate with a Home Manager backup
+extension so the original is retained.
+
 Activation runs `reconcile-codex`, which reapplies managed defaults using atomic
 replacement for each changed file, preserving trusted projects, other local
 settings, login and session state.

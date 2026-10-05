@@ -125,6 +125,7 @@ in
     programs.codex = {
       enable = true;
       package = codex;
+      context = ./AGENTS.md;
     };
     xdg.configFile."rtk/config.toml".text = ''
       [awareness]
