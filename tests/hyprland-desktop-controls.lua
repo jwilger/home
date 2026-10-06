@@ -113,7 +113,6 @@ local function fixture(per_monitor)
     for _, timer in ipairs(ready) do timer.callback() end
   end
   s.control = dofile(source)
-  s.control.setup(per_monitor)
   return s
 end
 local function test(name, fn)
@@ -122,104 +121,45 @@ local function test(name, fn)
   print("ok " .. count .. " - " .. name)
 end
 
-test("numbered workspace selection stays on the invoking monitor bank", function()
+test("number shortcuts use the same workspace IDs from either monitor", function()
   for _, side in ipairs({ "studio", "laptop" }) do
     for n = 1, 9 do
-      local s = fixture(true)
+      local s = fixture()
       s.active_monitor = s[side]
       s.control.workspace(n)
-      eq(s.studio.active_workspace.id, side == "studio" and n or 1)
-      eq(s.laptop.active_workspace.id, side == "laptop" and n + 10 or 11)
-      eq(s.active_monitor, s[side])
-      eq(#s.calls, n == 1 and 0 or 1)
+      eq(s.studio.active_workspace.id, n)
+      eq(s.laptop.active_workspace.id, 11)
+      eq(#s.calls, side == "studio" and n == 1 and 0 or 1)
     end
   end
 end)
 
-test("workspace events do not install automatic synchronization or timers", function()
-  local s = fixture(true)
-  s:activate(14)
-  eq(s.studio.active_workspace.id, 1)
-  eq(s.laptop.active_workspace.id, 14)
-  eq(s.active_monitor, s.laptop)
-  eq(#s.calls, 0)
-  eq(#s.timers, 0)
-end)
-
-test("already-active workspace selection does not touch the peer monitor", function()
-  local s = fixture(true)
-  s.active_monitor = s.studio
-  s.studio.active_workspace = s.workspaces[4]
-  s.control.workspace(4)
-  eq(s.studio.active_workspace.id, 4); eq(s.laptop.active_workspace.id, 11)
-  eq(s.active_monitor, s.studio)
-  eq(#s.calls, 0)
-end)
-
-test("workspace selection preserves the focused window on its monitor", function()
-  local s = fixture(true)
-  local window = s:add_window(1)
-  s.control.workspace(1)
-  eq(#s.calls, 0); eq(s.window, window)
-end)
-
-test("numbered window move stays in the window's monitor bank", function()
+test("numbered moves use ordinary IDs even from an old laptop workspace", function()
   for _, id in ipairs({ 1, 11 }) do
-    local s = fixture(true)
+    local s = fixture()
     local window = s:add_window(id)
     s.control.move_to_workspace(8)
-    eq(window.workspace.id, id == 1 and 8 or 18)
-    eq(s.studio.active_workspace.id, id == 1 and 8 or 1)
-    eq(s.laptop.active_workspace.id, id == 11 and 18 or 11)
-    eq(s.window, window); eq(s.active_monitor, window.monitor)
-    eq(#s.calls, 1)
+    eq(window.workspace.id, 8)
+    eq(s.calls[1].args.follow, true)
   end
 end)
 
-test("monitor transfer targets matching bank and follows the moved window", function()
-  local s = fixture(true)
-  s.control.workspace(5)
-  local window = s:add_window(5)
-  s.control.move_to_monitor("l")
-  eq(window.workspace.id, 15); eq(s.window, window); eq(s.active_monitor, s.laptop)
-  s.control.move_to_monitor("r")
-  eq(window.workspace.id, 5); eq(s.window, window); eq(s.active_monitor, s.studio)
-  local calls = #s.calls
-  s.control.move_to_monitor("r")
-  eq(#s.calls, calls, "no destination to the right of StudioDisplay")
-end)
-
-test("undocked laptop uses its bank without dispatching to missing monitor", function()
-  local s = fixture(true)
+test("undocked laptop shortcuts never select the old monitor bank", function()
+  local s = fixture()
   s.monitors = { s.laptop }; s.active_monitor = s.laptop
+  s.workspaces[7].monitor = s.laptop
   s.control.workspace(7)
-  eq(s.laptop.active_workspace.id, 17); eq(#s.calls, 1)
-  s:add_window(17); s.control.move_to_monitor("r"); eq(#s.calls, 1)
+  eq(s.laptop.active_workspace.id, 7)
+  eq(s.calls[1].args.workspace, "7")
 end)
 
-test("external-only and Gregor retain ordinary numeric shortcuts", function()
-  local s = fixture(true)
-  s.monitors = { s.studio }; s.control.workspace(6)
-  eq(s.studio.active_workspace.id, 6); eq(#s.calls, 1)
-  s = fixture(false)
-  s.control.workspace(8); eq(s.studio.active_workspace.id, 8)
-  eq(next(s.events), nil)
-  s:add_window(8); s.control.move_to_monitor("l")
-  eq(s.calls[#s.calls].args.monitor, "l")
-end)
-
-test("setup only selects a bank and registers no automatic lifecycle handlers", function()
-  local s = fixture(true)
-  eq(next(s.events), nil)
-  eq(#s.timers, 0)
-end)
-
-test("setup without per-monitor banks keeps ordinary numeric workspaces", function()
-  local s = fixture(false)
-  s.control.workspace(8)
-  eq(s.studio.active_workspace.id, 8)
-  eq(#s.timers, 0)
-  eq(next(s.events), nil)
+test("monitor transfer uses native movement and follows the window", function()
+  local s = fixture()
+  s:add_window(1)
+  s.control.move_to_monitor("l")
+  eq(s.calls[1].args.monitor, "l")
+  eq(s.calls[1].args.follow, true)
+  eq(next(s.events), nil); eq(#s.timers, 0)
 end)
 
 test("dwindle and master navigate and move natively without scrolling dispatch", function()
@@ -272,11 +212,6 @@ test("floating and empty workspaces avoid tiled-only commands", function()
   s:add_window(1, nil, true)
   s.control.focus("l"); s.control.move("r"); s.control.scrolling("fit active")
   eq(#s.calls, 2); eq(s.calls[1].kind, "focus"); eq(s.calls[2].kind, "move")
-end)
-
-test("setup is idempotent", function()
-  local s = fixture(true); s.control.setup(true)
-  eq(next(s.events), nil)
 end)
 
 print("1.." .. count)

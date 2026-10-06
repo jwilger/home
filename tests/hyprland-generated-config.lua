@@ -3,7 +3,7 @@ local binds, rules, controls, config = {}, {}, {}, {}
 local monitor_focus
 local function noop() end
 local function action() return noop end
-local methods = { "workspace", "move_to_workspace", "move_to_monitor", "focus", "move", "scrolling", "setup" }
+local methods = { "workspace", "move_to_workspace", "move_to_monitor", "focus", "move", "scrolling" }
 local controller = {}
 for _, method in ipairs(methods) do
   controller[method] = function(value) controls[#controls + 1] = { method, value } end
@@ -24,7 +24,7 @@ hl = {
   },
 }
 dofile(config_file)
-assert(controls[1][1] == "setup" and controls[1][2] == (profile == "jwilger-t14"))
+assert(next(rules) == nil, "dynamic workspaces must not have fixed rules")
 assert(config.binds.window_direction_monitor_fallback)
 local function check(keys, method, value)
   assert(binds[keys], "missing shortcut: " .. keys)()
@@ -34,12 +34,7 @@ end
 for n = 1, 9 do
   check("SUPER + " .. n, "workspace", n)
   check("SUPER + SHIFT + " .. n, "move_to_workspace", n)
-  assert(rules[n] and rules[n].persistent and rules[n].layout == "scrolling")
-  assert(rules[n].monitor == (profile == "jwilger-t14" and "desc:Apple Computer Inc StudioDisplay" or "DP-3"))
-  if profile == "jwilger-t14" then
-    local peer = assert(rules[n + 10])
-    assert(peer.monitor == "eDP-1" and peer.default_name == n .. "-laptop" and peer.persistent)
-  else assert(not rules[n + 10]) end
+
 end
 for key, dir in pairs({ H = "l", J = "d", K = "u", L = "r", LEFT = "l", DOWN = "d", UP = "u", RIGHT = "r" }) do
   check("SUPER + " .. key, "focus", dir)

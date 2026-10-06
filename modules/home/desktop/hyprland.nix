@@ -14,36 +14,7 @@ let
     ];
   };
   exec = keys: command: bind keys "hl.dsp.exec_cmd(${builtins.toJSON command})";
-  perMonitorWorkspaces = config.jwilger.hostProfile == "jwilger-t14";
   control = keys: action: bind keys ''function() require("desktop-controls").${action} end'';
-  workspaceRules = lib.concatMap (
-    number:
-    [
-      {
-        _args = [
-          {
-            workspace = builtins.toString number;
-            layout = "scrolling";
-            monitor = if perMonitorWorkspaces then "desc:Apple Computer Inc StudioDisplay" else "DP-3";
-            persistent = true;
-            default = number == 1;
-          }
-        ];
-      }
-    ]
-    ++ lib.optional perMonitorWorkspaces {
-      _args = [
-        {
-          workspace = builtins.toString (number + 10);
-          default_name = "${builtins.toString number}-laptop";
-          layout = "scrolling";
-          monitor = "eDP-1";
-          persistent = true;
-          default = number == 1;
-        }
-      ];
-    }
-  ) (lib.range 1 9);
   workspaceBinds = lib.concatMap (number: [
     (control "SUPER + ${builtins.toString number}" "workspace(${builtins.toString number})")
     (control "SUPER + SHIFT + ${builtins.toString number}" "move_to_workspace(${builtins.toString number})")
@@ -249,8 +220,6 @@ in
             }
           ];
 
-      workspace_rule = workspaceRules;
-
       layer_rule = [
         {
           _args = [
@@ -408,7 +377,6 @@ in
       -- first frame. The declarative colors above remain the safe fallback
       -- until Noctalia has written its current palette.
       package.path = ${builtins.toJSON "${config.xdg.configHome}/hypr/?.lua;"} .. package.path
-      require("desktop-controls").setup(${lib.boolToString perMonitorWorkspaces})
       local noctalia_ok, noctalia_theme = pcall(require, "noctalia")
       if noctalia_ok then
         noctalia_theme.apply_theme()

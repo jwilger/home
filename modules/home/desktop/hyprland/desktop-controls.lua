@@ -1,42 +1,14 @@
 -- Hyprland 0.55 Lua API. Keep layout-specific dispatchers behind runtime checks:
 -- Noctalia changes the active workspace's layout without reloading keybindings.
 local M = {}
-local per_monitor = false
-local configured = false
-local studio_description = "Apple Computer Inc StudioDisplay"
-
 local function dispatch(action)
   hl.dispatch(action)
-end
-
-local function logical_workspace(workspace)
-  if not workspace or workspace.special then return nil end
-  local id = workspace.id
-  if id >= 1 and id <= 9 then return id end
-  if id >= 11 and id <= 19 then return id - 10 end
-  return nil
-end
-
-local function monitors()
-  local studio, laptop
-  for _, monitor in ipairs(hl.get_monitors()) do
-    if monitor.name == "eDP-1" then laptop = monitor end
-    if (monitor.description or ""):sub(1, #studio_description) == studio_description then
-      studio = monitor
-    end
-  end
-  return studio, laptop
-end
-
-local function workspace_id(number, monitor)
-  if per_monitor and monitor and monitor.name == "eDP-1" then return number + 10 end
-  return number
 end
 
 function M.workspace(number)
   local monitor = hl.get_active_monitor()
   if not monitor then return end
-  local id = workspace_id(number, monitor)
+  local id = number
   if monitor.active_workspace and monitor.active_workspace.id == id then return end
   dispatch(hl.dsp.focus({ workspace = tostring(id) }))
 end
@@ -45,27 +17,14 @@ function M.move_to_workspace(number)
   local window = hl.get_active_window()
   if not window then return end
   dispatch(hl.dsp.window.move({
-    workspace = tostring(workspace_id(number, window.monitor)), follow = true,
+    workspace = tostring(number), follow = true,
   }))
 end
 
 function M.move_to_monitor(direction)
   local window = hl.get_active_window()
   if not window then return end
-  if not per_monitor then
-    dispatch(hl.dsp.window.move({ monitor = direction, follow = true }))
-    return
-  end
-  local studio, laptop = monitors()
-  if not studio or not laptop then return end
-  local target
-  if direction == "l" and window.monitor.name == studio.name then target = laptop end
-  if direction == "r" and window.monitor.name == laptop.name then target = studio end
-  local number = logical_workspace(window.workspace)
-  if not target or not number then return end
-  dispatch(hl.dsp.window.move({
-    workspace = tostring(workspace_id(number, target)), follow = true,
-  }))
+  dispatch(hl.dsp.window.move({ monitor = direction, follow = true }))
 end
 
 local function tiled_window()
@@ -115,10 +74,13 @@ function M.scrolling(command)
   end
 end
 
-function M.setup(enable_per_monitor)
-  if configured then return end
-  configured = true
-  per_monitor = enable_per_monitor
+-- A running compositor can retain the resolved path of an older generation.
+-- Its setup call must also release the old persistent workspace rules until login.
+function M.setup()
+  for number = 1, 9 do
+    hl.workspace_rule({ workspace = tostring(number), persistent = false })
+    hl.workspace_rule({ workspace = tostring(number + 10), persistent = false })
+  end
 end
 
 return M
