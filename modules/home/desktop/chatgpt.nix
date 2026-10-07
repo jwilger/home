@@ -82,6 +82,12 @@ let
       substituteInPlace app/.vite/build/worker.js \
         --replace-fail 'async start(){if(this.disposed)return;if(this.logger.info(`Starting git repo watcher`),' \
         'async start(){return;if(this.disposed)return;if(this.logger.info(`Starting git repo watcher`),'
+      # Node's cp preserves read-only Nix-store modes. The app subsequently
+      # edits plugin manifests and removes staging directories, so make only
+      # the private copies writable, without following symlinks back to source.
+      substituteInPlace app/.vite/build/main-*.js \
+        --replace-fail 'await v.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});return' \
+        'await v.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});await(async function writable(p){let s=await v.default.lstat(p);if(s.isSymbolicLink())return;await v.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await v.default.readdir(p))await writable(p+"/"+name)})(t);return'
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
