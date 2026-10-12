@@ -55,33 +55,61 @@ let
         -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector'
     '';
   };
-  patchCodexHooks = pkgs.writeShellApplication {
-    name = "patch-hindsight-codex-hooks";
+  # Git's log.showSignature adds verification text to --format=%aI, which
+  # Hindsight sends as an ISO timestamp. Confine the override to its hooks.
+  mkHooksPatch =
+    name: hooksFile:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.jq
+      ];
+      text = ''
+        hooks_file=${hooksFile}
+        if [[ ! -f "$hooks_file" ]]; then
+          exit 0
+        fi
+        hooks_tmp="$(mktemp "$(dirname "$hooks_file")/.hindsight-hooks.XXXXXX")"
+        trap 'rm -f -- "$hooks_tmp"' EXIT
+        jq '
+          walk(
+            if type == "object" and .type == "command" and
+               (.command? | type == "string") and
+               (.command | contains("/coding-agents/dist/")) then
+              .command |= (
+                if startswith("env GIT_CONFIG_COUNT=1 ") then .
+                else "env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=log.showSignature GIT_CONFIG_VALUE_0=false " + .
+                end
+              )
+            else . end
+          )
+        ' "$hooks_file" > "$hooks_tmp"
+        chmod --reference="$hooks_file" "$hooks_tmp"
+        mv -- "$hooks_tmp" "$hooks_file"
+      '';
+    };
+  patchCodexHooks = mkHooksPatch "patch-hindsight-codex-hooks" ''"$HOME/.codex/hooks.json"'';
+  patchClaudeHooks = mkHooksPatch "patch-hindsight-claude-hooks" ''"$HOME/.claude/settings.json"'';
+  # Claude Code uses its native installer, not Nix; the vendor installer calls
+  # `claude mcp add`, so systemd units need its bin directory on PATH.
+  claudeBinDirectory = "${homeDirectory}/.local/bin";
+  installClaudeCode = pkgs.writeShellApplication {
+    name = "install-hindsight-claude-code";
     runtimeInputs = [
-      pkgs.coreutils
-      pkgs.jq
+      pkgs.nodejs_22
+      pkgs.uv
     ];
     text = ''
-      # Git's log.showSignature adds verification text to --format=%aI, which
-      # Hindsight sends as an ISO timestamp. Confine the override to its hooks.
-      hooks_file="$HOME/.codex/hooks.json"
-      hooks_tmp="$(mktemp "$HOME/.codex/.hindsight-hooks.XXXXXX")"
-      trap 'rm -f -- "$hooks_tmp"' EXIT
-      jq '
-        walk(
-          if type == "object" and .type == "command" and
-             (.command? | type == "string") and
-             (.command | contains("/coding-agents/dist/")) then
-            .command |= (
-              if startswith("env GIT_CONFIG_COUNT=1 ") then .
-              else "env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=log.showSignature GIT_CONFIG_VALUE_0=false " + .
-              end
-            )
-          else . end
-        )
-      ' "$hooks_file" > "$hooks_tmp"
-      chmod --reference="$hooks_file" "$hooks_tmp"
-      mv -- "$hooks_tmp" "$hooks_file"
+      export PATH=${lib.escapeShellArg claudeBinDirectory}:"$PATH"
+      if ! command -v claude > /dev/null; then
+        echo "Claude Code CLI is not installed yet." >&2
+        exit 1
+      fi
+      # The Home Manager file already selects the server. Passing --server
+      # makes the vendor installer rewrite that read-only symlink.
+      npx --yes @vectorize-io/hindsight-coding-agents@latest install claude-code
+      ${lib.getExe patchClaudeHooks}
     '';
   };
   installCodex = pkgs.writeShellApplication {
@@ -225,6 +253,87 @@ let
       touch "$state_dir/codex-history-imported-v2"
     '';
   };
+  importClaudeCode = pkgs.writeShellApplication {
+    name = "import-hindsight-claude-history";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.git
+      pkgs.jq
+      pkgs.nodejs_22
+      pkgs.ripgrep
+      pkgs.uv
+    ];
+    text = ''
+      # Keep signature verification banners out of git log's ISO date output.
+      export GIT_CONFIG_COUNT=1
+      export GIT_CONFIG_KEY_0=log.showSignature
+      export GIT_CONFIG_VALUE_0=false
+      export PATH=${lib.escapeShellArg claudeBinDirectory}:"$PATH"
+      declare -A roots=()
+      projects_dir="$HOME/.claude/projects"
+      if [[ ! -d "$projects_dir" ]]; then
+        echo "No Claude Code session transcripts found." >&2
+        exit 1
+      fi
+
+      while IFS= read -r -d "" transcript; do
+        cwd="$(jq -r 'select(.cwd? | type == "string") | .cwd' "$transcript" 2>/dev/null | head -n 1 || true)"
+        if [[ -z "$cwd" ]]; then
+          continue
+        fi
+        if [[ ! -d "$cwd" ]]; then
+          echo "Skipping missing session directory: $cwd" >&2
+          continue
+        fi
+        # Skip scratch directories; banks are keyed by git project.
+        if ! root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)"; then
+          continue
+        fi
+        case "$root" in
+          /tmp/* | "''${TMPDIR:-/tmp}"/*) continue ;;
+        esac
+        roots["$root"]=1
+      done < <(rg --files -0 --max-depth 2 -g '*.jsonl' "$projects_dir")
+
+      if [[ "$#" -gt 0 && "$1" == --list-roots ]]; then
+        printf '%s\n' "''${!roots[@]}" | sort
+        exit 0
+      fi
+
+      curl --fail --silent --show-error --max-time 5 http://127.0.0.1:9077/health > /dev/null
+      import_log="$(mktemp)"
+      cleanup_import() {
+        import_status=$?
+        rm -f -- "$import_log"
+        if ! ${lib.getExe patchClaudeHooks}; then
+          echo "Could not patch Hindsight Claude Code hooks after import." >&2
+          import_status=1
+        fi
+        exit "$import_status"
+      }
+      trap cleanup_import EXIT
+      for root in "''${!roots[@]}"; do
+        echo "Importing Claude Code history for $root"
+        if ! (
+          cd "$root"
+          npx --yes @vectorize-io/hindsight-coding-agents@latest install claude-code \
+            --import-conversations
+        ) 2>&1 | tee "$import_log"; then
+          exit 1
+        fi
+        # The vendor installer catches deepen failures and otherwise exits 0.
+        if rg -q 'conversation import did not finish|--import-conversations skipped|gitlog ingest failed' "$import_log"; then
+          echo "Hindsight import was incomplete; the timer will retry." >&2
+          exit 1
+        fi
+      done
+
+      state_dir="$HOME/.local/state/hindsight"
+      mkdir -p "$state_dir"
+      touch "$state_dir/claude-history-imported-v1"
+    '';
+  };
 in
 {
   home.file.".hindsight/coding-agent.json".text = builtins.toJSON {
@@ -284,6 +393,19 @@ in
       };
       Install.WantedBy = [ "default.target" ];
     };
+    hindsight-claude-install = {
+      Unit = {
+        Description = "Install Hindsight Claude Code hooks, MCP and skill";
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = lib.getExe installClaudeCode;
+        TimeoutStartSec = "10min";
+        Restart = "on-failure";
+        RestartSec = "30min";
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
 
     hindsight-daemon-start = {
       Unit = {
@@ -296,6 +418,7 @@ in
         After = [
           "hindsight-postgres.service"
           "hindsight-codex-install.service"
+          "hindsight-claude-install.service"
           "tenkr-onepassword.service"
           "tenkr-onepassword-cli.service"
         ];
@@ -328,11 +451,36 @@ in
         TimeoutStartSec = "3h";
       };
     };
+    hindsight-claude-history-import = {
+      Unit = {
+        Description = "Import historical Claude Code sessions into Hindsight";
+        After = [
+          "hindsight-claude-install.service"
+          "hindsight-daemon-start.service"
+          "hindsight-codex-history-import.service"
+        ];
+        ConditionPathExists = "!%h/.local/state/hindsight/claude-history-imported-v1";
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = lib.getExe importClaudeCode;
+        TimeoutStartSec = "3h";
+      };
+    };
   };
 
   systemd.user.timers = {
     hindsight-codex-install = {
       Unit.Description = "Reconcile Hindsight Codex hooks and MCP weekly";
+      Timer = {
+        OnCalendar = "weekly";
+        Persistent = true;
+        RandomizedDelaySec = "1d";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
+    hindsight-claude-install = {
+      Unit.Description = "Reconcile Hindsight Claude Code hooks and MCP weekly";
       Timer = {
         OnCalendar = "weekly";
         Persistent = true;
@@ -351,6 +499,14 @@ in
     };
     hindsight-codex-history-import = {
       Unit.Description = "Import historical Codex sessions after Hindsight is ready";
+      Timer = {
+        OnStartupSec = "15min";
+        OnUnitInactiveSec = "1h";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
+    hindsight-claude-history-import = {
+      Unit.Description = "Import historical Claude Code sessions after Hindsight is ready";
       Timer = {
         OnStartupSec = "15min";
         OnUnitInactiveSec = "1h";
