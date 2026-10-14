@@ -184,6 +184,12 @@ Hindsight uses a Home Manager-managed PostgreSQL 18 instance with pgvector in
 socket. It does not use Hindsight's bundled PostgreSQL or the system NixOS
 configuration.
 
+The coding-agent runtime is pinned in `modules/home/hindsight.nix` and runs
+from the immutable Nix store. Home Manager owns its updates; session auto-update
+is disabled. Both harness installers and history imports share an installation
+lock. Installer timers run at startup and weekly; the installers are not attached
+to `default.target`, so NixOS user-manager reloads do not reinstall them.
+
 The `hindsight-daemon-start` timer retries startup every five minutes. Once its
 `/health` endpoint is ready, `hindsight-codex-history-import` imports existing
 Codex transcripts by their recorded working directory and then records a

@@ -187,7 +187,7 @@
                   .retainSessions == true and
                   .autoReflect == true and
                   .gitIngest == "message" and
-                  .autoUpdate == true
+                  .autoUpdate == false
                 ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
                 jq -e '.serverMode == "daemon" and .apiPort == 9077' \
                   "$homeFiles/.hindsight/daemon.json" >/dev/null
@@ -209,6 +209,21 @@
                 test -f "$homeFiles/.config/systemd/user/hindsight-claude-install.timer"
                 test -f "$homeFiles/.config/systemd/user/hindsight-claude-history-import.service"
                 test -f "$homeFiles/.config/systemd/user/hindsight-claude-history-import.timer"
+                # A user-manager reload must not restart inactive installers.
+                for harness in codex claude; do
+                  unit="$homeFiles/.config/systemd/user/hindsight-$harness-install.service"
+                  ! grep -Fq 'WantedBy=default.target' "$unit"
+                  grep -Fq 'OnStartupSec=1min' \
+                    "$homeFiles/.config/systemd/user/hindsight-$harness-install.timer"
+                  installer="$(sed -n 's/^ExecStart=//p' "$unit")"
+                  ! grep -Fq 'npx --yes' "$installer"
+                  shared="$(sed -n 's/.*\(\/nix\/store\/[^ ]*-install-hindsight\/bin\/install-hindsight\) install.*/\1/p' "$installer")"
+                  test -x "$shared"
+                  grep -Fq 'exec flock' "$shared"
+                  runtime="$(sed -n 's/.*node \([^ ]*\)\/installer.js.*/\1/p' "$shared")"
+                  test -f "$runtime/codex-stop-hook.js"
+                  grep -Fq 'function stageRuntime(c) { return c;' "$runtime/installer.js"
+                done
                 test ! -e "$homeFiles/.codex/config.toml"
                 test ! -e "$homeFiles/.codex/hooks.json"
                 test -f "$homeFiles/.config/systemd/user/serena-runtime-install.service"

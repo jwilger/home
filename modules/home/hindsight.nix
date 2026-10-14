@@ -7,7 +7,41 @@
 let
   homeDirectory = config.home.homeDirectory;
   hindsightDirectory = "${homeDirectory}/.hindsight";
-  codingAgentRuntime = "${hindsightDirectory}/coding-agents/dist";
+  # Hooks must never depend on the vendor's delete-then-copy staging directory.
+  codingAgentPackage = pkgs.stdenvNoCC.mkDerivation {
+    pname = "hindsight-coding-agents";
+    version = "0.8.1";
+    src = pkgs.fetchurl {
+      url = "https://registry.npmjs.org/@vectorize-io/hindsight-coding-agents/-/hindsight-coding-agents-0.8.1.tgz";
+      hash = "sha256:407abd66ba5d4603a460ecfe6795d47a0e0687439a800d4bc79305f2ee2f5e1b";
+    };
+    dontBuild = true;
+    postPatch = ''
+      # Retain the surgical config merge, but use this immutable package directly.
+      substituteInPlace dist/installer.js \
+        --replace-fail 'function stageRuntime(c) {' 'function stageRuntime(c) { return c;' \
+        --replace-fail 'cpSync2(src, dst, { recursive: true });' \
+          'mkdirSync7(dst, { recursive: true }); execFileSync8("chmod", ["-R", "u+w", dst]); execFileSync8("cp", ["-r", "--no-preserve=mode", src + "/.", dst]);'
+    '';
+    installPhase = ''
+      mkdir -p "$out"
+      cp -r . "$out/"
+    '';
+  };
+  codingAgentRuntime = "${codingAgentPackage}/dist";
+  installHindsight = pkgs.writeShellApplication {
+    name = "install-hindsight";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.util-linux
+      pkgs.nodejs_22
+    ];
+    text = ''
+      mkdir -p "$HOME/.local/state/hindsight"
+      exec flock "$HOME/.local/state/hindsight/install.lock" \
+        node ${codingAgentRuntime}/installer.js "$@"
+    '';
+  };
   credentialEnv = "${hindsightDirectory}/openai.env";
   daemonConfig = "${hindsightDirectory}/daemon.json";
   postgres = pkgs.postgresql_18.withPackages (extensions: [ extensions.pgvector ]);
@@ -76,7 +110,7 @@ let
           walk(
             if type == "object" and .type == "command" and
                (.command? | type == "string") and
-               (.command | contains("/coding-agents/dist/")) then
+               (.command | test("(/coding-agents|hindsight-coding-agents-[^/]+)/dist/")) then
               .command |= (
                 if startswith("env GIT_CONFIG_COUNT=1 ") then .
                 else "env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=log.showSignature GIT_CONFIG_VALUE_0=false " + .
@@ -108,7 +142,7 @@ let
       fi
       # The Home Manager file already selects the server. Passing --server
       # makes the vendor installer rewrite that read-only symlink.
-      npx --yes @vectorize-io/hindsight-coding-agents@latest install claude-code
+      ${lib.getExe installHindsight} install claude-code
       ${lib.getExe patchClaudeHooks}
     '';
   };
@@ -124,7 +158,7 @@ let
       "$codex_bin" features enable hooks
       # The Home Manager file already selects the server. Passing --server
       # makes the vendor installer rewrite that read-only symlink.
-      npx --yes @vectorize-io/hindsight-coding-agents@latest install codex
+      ${lib.getExe installHindsight} install codex
       ${lib.getExe patchCodexHooks}
     '';
   };
@@ -236,7 +270,7 @@ let
         echo "Importing Codex history for $root"
         if ! (
           cd "$root"
-          npx --yes @vectorize-io/hindsight-coding-agents@latest install codex \
+          ${lib.getExe installHindsight} install codex \
             --import-conversations
         ) 2>&1 | tee "$import_log"; then
           exit 1
@@ -317,7 +351,7 @@ let
         echo "Importing Claude Code history for $root"
         if ! (
           cd "$root"
-          npx --yes @vectorize-io/hindsight-coding-agents@latest install claude-code \
+          ${lib.getExe installHindsight} install claude-code \
             --import-conversations
         ) 2>&1 | tee "$import_log"; then
           exit 1
@@ -336,6 +370,14 @@ let
   };
 in
 {
+  # Switch hook/MCP paths with the generation, rather than waiting for a timer.
+  home.activation.hindsightHooks = lib.hm.dag.entryAfter [ "linkGeneration" "codexDefaults" ] ''
+    run ${lib.getExe installCodex}
+    if [[ -x ${lib.escapeShellArg "${claudeBinDirectory}/claude"} ]]; then
+      run ${lib.getExe installClaudeCode}
+    fi
+  '';
+
   home.file.".hindsight/coding-agent.json".text = builtins.toJSON {
     serverMode = "self-hosted";
     harness = "codex";
@@ -346,7 +388,8 @@ in
     retainSessions = true;
     autoReflect = true;
     gitIngest = "message";
-    autoUpdate = true;
+    # Home Manager owns runtime updates; sessions must not replace live hooks.
+    autoUpdate = false;
   };
 
   home.file.".hindsight/daemon.json".text = builtins.toJSON {
@@ -391,7 +434,6 @@ in
         Restart = "on-failure";
         RestartSec = "30min";
       };
-      Install.WantedBy = [ "default.target" ];
     };
     hindsight-claude-install = {
       Unit = {
@@ -404,7 +446,6 @@ in
         Restart = "on-failure";
         RestartSec = "30min";
       };
-      Install.WantedBy = [ "default.target" ];
     };
 
     hindsight-daemon-start = {
@@ -473,6 +514,7 @@ in
     hindsight-codex-install = {
       Unit.Description = "Reconcile Hindsight Codex hooks and MCP weekly";
       Timer = {
+        OnStartupSec = "1min";
         OnCalendar = "weekly";
         Persistent = true;
         RandomizedDelaySec = "1d";
@@ -482,6 +524,7 @@ in
     hindsight-claude-install = {
       Unit.Description = "Reconcile Hindsight Claude Code hooks and MCP weekly";
       Timer = {
+        OnStartupSec = "1min";
         OnCalendar = "weekly";
         Persistent = true;
         RandomizedDelaySec = "1d";
