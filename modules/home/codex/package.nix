@@ -1,4 +1,25 @@
 { pkgs }:
+let
+  alsaConfig = pkgs.writeText "codex-alsa.conf" ''
+    <${pkgs.alsa-lib}/share/alsa/alsa.conf>
+    # The bundled ALSA library cannot read NixOS's patched `libs` syntax.
+    # Retain standard device definitions, but supply our own PipeWire defaults.
+    !@hooks []
+    pcm_type.!pipewire {
+      lib ${pkgs.pipewire}/lib/alsa-lib/libasound_module_pcm_pipewire.so
+    }
+    ctl_type.!pipewire {
+      lib ${pkgs.pipewire}/lib/alsa-lib/libasound_module_ctl_pipewire.so
+    }
+    pcm.!default {
+      type pipewire
+      playback_node "-1"
+      capture_node "-1"
+      hint { show on description "Default PipeWire Device" }
+    }
+    ctl.!default { type pipewire }
+  '';
+in
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "codex";
   version = "0.163.0";
@@ -22,11 +43,14 @@ pkgs.stdenvNoCC.mkDerivation rec {
   dontUnpack = true;
   installPhase = ''
     runHook preInstall
-    mkdir -p "$out/lib/codex" "$out/bin"
+    mkdir -p "$out/lib/codex" "$out/bin" "$out/share/codex"
+    ln -s ${alsaConfig} "$out/share/codex/alsa.conf"
     tar -xzf "$src" -C "$out/lib/codex"
     test -x "$out/lib/codex/bin/codex"
     test -x "$out/lib/codex/bin/codex-code-mode-host"
     makeWrapper "$out/lib/codex/bin/codex" "$out/bin/codex" \
+      --set-default ALSA_CONFIG_PATH "$out/share/codex/alsa.conf" \
+      --set-default ALSA_CONFIG_DIR ${pkgs.alsa-lib}/share/alsa \
       --prefix PATH : ${
         pkgs.lib.makeBinPath [
           pkgs.ripgrep
@@ -44,6 +68,53 @@ pkgs.stdenvNoCC.mkDerivation rec {
     "$out/bin/codex" --version | grep -Fx 'codex-cli ${version}'
     LD_TRACE_LOADED_OBJECTS=1 "$out/lib/codex/codex-resources/voice/bin/codex-voice-host" > voice-libraries.log
     ! grep -F 'not found' voice-libraries.log
+    # Exercise the bundled ALSA parser/plugin loader, even in builds without
+    # audio devices or a PipeWire server. Device availability is checked live.
+    ALSA_CONFIG_PATH="$out/share/codex/alsa.conf" \
+      ALSA_CONFIG_DIR=${pkgs.alsa-lib}/share/alsa python3 - "$out" <<'PY'
+    import json
+    import pathlib
+    import select
+    import struct
+    import subprocess
+    import sys
+
+    helper = pathlib.Path(sys.argv[1]) / "lib/codex/codex-resources/voice/bin/codex-voice-host"
+    commit = subprocess.check_output([helper, "--build-commit"], text=True).strip()
+    messages = [
+        {"type": "hello", "protocol": 1, "buildCommit": commit},
+        {"type": "listDevices", "kind": "input"},
+        {"type": "listDevices", "kind": "output"},
+        {"type": "close"},
+    ]
+    # The helper has a bounded control queue: await each reply before sending.
+    with subprocess.Popen([helper], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE) as process:
+        replies = []
+        for message in messages:
+            payload = json.dumps(message).encode()
+            process.stdin.write(struct.pack(">I", len(payload)) + payload)
+            process.stdin.flush()
+            if not select.select([process.stdout], [], [], 20)[0]:
+                process.kill()
+                raise RuntimeError("voice helper reply timed out")
+            header = process.stdout.read(4)
+            if len(header) != 4:
+                raise RuntimeError("voice helper closed before replying")
+            size, = struct.unpack(">I", header)
+            replies.append(json.loads(process.stdout.read(size)))
+        process.stdin.close()
+        process.wait(timeout=20)
+        errors = process.stderr.read().decode(errors="replace")
+        if process.returncode:
+            raise RuntimeError(f"voice helper exited {process.returncode}: {errors}")
+    for failure in ("Cannot access file", "Unknown field libs", "Cannot open shared library"):
+        if failure in errors:
+            raise RuntimeError(errors)
+    if [reply["type"] for reply in replies] != ["ready", "deviceList", "deviceList", "closed"]:
+        raise RuntimeError(f"unexpected voice helper replies: {replies}")
+    print("Voice ALSA configuration and helper protocol verified")
+    PY
   '';
   meta = {
     description = "OpenAI Codex CLI with the official companion runtimes";
