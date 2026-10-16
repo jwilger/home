@@ -16,16 +16,16 @@
       flake = false;
     };
     lanyard = {
-      url = "github:jwilger/lanyard-ssh-agent/v0.1.2";
+      url = "github:jwilger/lanyard-ssh-agent/v1.0.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     noctalia-plugins = {
-      # Compatible Luau plugins for the pinned Noctalia 5.1 shell.
-      url = "github:noctalia-dev/community-plugins/df2b7ed8029d9142a601cd6025e3dc29f9f6d52f";
+      # Pin community plugins alongside the Noctalia shell update.
+      url = "github:noctalia-dev/community-plugins/03414083ae64b268dbef123c7296cf5d690fa223";
       flake = false;
     };
-    zjstatus.url = "github:dj95/zjstatus/053898e1e245c0df9aaaa783710e88e2926fbbb2";
+    zjstatus.url = "github:dj95/zjstatus/v0.25.0";
   };
 
   outputs =

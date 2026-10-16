@@ -1,10 +1,10 @@
 { pkgs }:
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "rtk";
-  version = "0.51.0";
+  version = "1.0.1";
   src = pkgs.fetchurl {
     url = "https://github.com/rtk-ai/rtk/releases/download/v${version}/rtk-x86_64-unknown-linux-musl.tar.gz";
-    hash = "sha256-UCjTsZqPCZDTD+yfuwfjJ4K8VpjmGPsYYarYqcy6TrU=";
+    hash = "sha256-W5GcO8y3mbZ6YYZtDmF0EKT83xc+JhREDlneL6IANDY=";
   };
   dontUnpack = true;
   installPhase = ''

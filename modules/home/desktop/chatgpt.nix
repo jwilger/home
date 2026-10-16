@@ -2,11 +2,11 @@
 let
   chatgpt = pkgs.stdenv.mkDerivation rec {
     pname = "chatgpt";
-    version = "26.1002.52244";
+    version = "26.1013.31256";
 
     src = pkgs.fetchurl {
       url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-      hash = "sha256-lJjkFxMaJ4vONb//YnXSUsDTMvF6/AMT4LeCdJ9NNIo=";
+      hash = "sha256-cMzyub94CY57u/3b8e4Zao/dQr63538W3UL6ujZAMyQ=";
     };
 
     nativeBuildInputs = with pkgs; [
@@ -86,8 +86,8 @@ let
       # edits plugin manifests and removes staging directories, so make only
       # the private copies writable, without following symlinks back to source.
       substituteInPlace app/.vite/build/main-*.js \
-        --replace-fail 'await v.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});return' \
-        'await v.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});await(async function writable(p){let s=await v.default.lstat(p);if(s.isSymbolicLink())return;await v.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await v.default.readdir(p))await writable(p+"/"+name)})(t);return'
+        --replace-fail 'await k.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});return' \
+        'await k.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});await(async function writable(p){let s=await k.default.lstat(p);if(s.isSymbolicLink())return;await k.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await k.default.readdir(p))await writable(p+"/"+name)})(t);return'
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \

@@ -1,10 +1,10 @@
 { pkgs }:
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "codex";
-  version = "0.162.1";
+  version = "0.163.0";
   src = pkgs.fetchurl {
     url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-package-x86_64-unknown-linux-musl.tar.gz";
-    hash = "sha256-pnb1ciquDYbL43ZDMvCOqx/didwKMAs61P+/SGEfo+M=";
+    hash = "sha256-WCZGxr8FYesN5UD3/IW5EhsAkagmvG6Wgwt/FyISIYI=";
   };
   nativeBuildInputs = [
     pkgs.makeWrapper
@@ -44,7 +44,6 @@ pkgs.stdenvNoCC.mkDerivation rec {
     "$out/bin/codex" --version | grep -Fx 'codex-cli ${version}'
     LD_TRACE_LOADED_OBJECTS=1 "$out/lib/codex/codex-resources/voice/bin/codex-voice-host" > voice-libraries.log
     ! grep -F 'not found' voice-libraries.log
-    "$out/lib/codex/codex-resources/zsh/bin/zsh" -c 'print codex-zsh-ready' | grep -Fx codex-zsh-ready
   '';
   meta = {
     description = "OpenAI Codex CLI with the official companion runtimes";

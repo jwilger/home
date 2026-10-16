@@ -2,11 +2,11 @@
 let
   claude-desktop = pkgs.stdenv.mkDerivation rec {
     pname = "claude-desktop";
-    version = "1.40609.1";
+    version = "2.42304.0";
 
     src = pkgs.fetchurl {
       url = "https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop/claude-desktop_${version}_amd64.deb";
-      hash = "sha256-gBguhRHGu+5t4mx+4iX70qmroidO8UBaHYnNj+ejgNw=";
+      hash = "sha256-dM0szCnSQWUUTkVcvIcsbMKiSiY7g+c0IOlfiRZtSqQ=";
     };
 
     nativeBuildInputs = with pkgs; [
@@ -46,6 +46,7 @@ let
       nspr
       nss
       pango
+      pipewire
       systemd
       util-linux
     ];

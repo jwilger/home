@@ -12,7 +12,7 @@ let
   escapeSystemdExecArgs = lib.concatMapStringsSep " " escapeSystemdExecArg;
   lanyardPackage = pkgs.rustPlatform.buildRustPackage {
     pname = "lanyard-ssh-agent";
-    version = "0.1.2";
+    version = "1.0.0";
     src = jwilgerInputs.lanyard;
     cargoLock.lockFile = "${jwilgerInputs.lanyard}/Cargo.lock";
     nativeCheckInputs = [ pkgs.jq ];
