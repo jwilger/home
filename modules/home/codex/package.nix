@@ -48,9 +48,12 @@ pkgs.stdenvNoCC.mkDerivation rec {
     tar -xzf "$src" -C "$out/lib/codex"
     test -x "$out/lib/codex/bin/codex"
     test -x "$out/lib/codex/bin/codex-code-mode-host"
-    makeWrapper "$out/lib/codex/bin/codex" "$out/bin/codex" \
+    # Codex filters ALSA variables out of its helper environment. Apply them
+    # inside the helper launcher, after that boundary, rather than to all CLI children.
+    wrapProgram "$out/lib/codex/codex-resources/voice/bin/codex-voice-host" \
       --set-default ALSA_CONFIG_PATH "$out/share/codex/alsa.conf" \
-      --set-default ALSA_CONFIG_DIR ${pkgs.alsa-lib}/share/alsa \
+      --set-default ALSA_CONFIG_DIR ${pkgs.alsa-lib}/share/alsa
+    makeWrapper "$out/lib/codex/bin/codex" "$out/bin/codex" \
       --prefix PATH : ${
         pkgs.lib.makeBinPath [
           pkgs.ripgrep
@@ -66,13 +69,13 @@ pkgs.stdenvNoCC.mkDerivation rec {
     python3 ${../../../scripts/fix-codex-manifests} "$out/lib/codex"
     python3 ${../../../scripts/fix-codex-manifests} "$out/lib/codex" --verify
     "$out/bin/codex" --version | grep -Fx 'codex-cli ${version}'
-    LD_TRACE_LOADED_OBJECTS=1 "$out/lib/codex/codex-resources/voice/bin/codex-voice-host" > voice-libraries.log
+    LD_TRACE_LOADED_OBJECTS=1 "$out/lib/codex/codex-resources/voice/bin/.codex-voice-host-wrapped" > voice-libraries.log
     ! grep -F 'not found' voice-libraries.log
     # Exercise the bundled ALSA parser/plugin loader, even in builds without
     # audio devices or a PipeWire server. Device availability is checked live.
-    ALSA_CONFIG_PATH="$out/share/codex/alsa.conf" \
-      ALSA_CONFIG_DIR=${pkgs.alsa-lib}/share/alsa python3 - "$out" <<'PY'
+    python3 - "$out" <<'PY'
     import json
+    import os
     import pathlib
     import select
     import struct
@@ -80,7 +83,10 @@ pkgs.stdenvNoCC.mkDerivation rec {
     import sys
 
     helper = pathlib.Path(sys.argv[1]) / "lib/codex/codex-resources/voice/bin/codex-voice-host"
-    commit = subprocess.check_output([helper, "--build-commit"], text=True).strip()
+    # Reproduce the audio helper's filtered environment: no inherited ALSA settings.
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.startswith("ALSA_")}
+    commit = subprocess.check_output([helper, "--build-commit"], env=environment, text=True).strip()
     messages = [
         {"type": "hello", "protocol": 1, "buildCommit": commit},
         {"type": "listDevices", "kind": "input"},
@@ -89,7 +95,7 @@ pkgs.stdenvNoCC.mkDerivation rec {
     ]
     # The helper has a bounded control queue: await each reply before sending.
     with subprocess.Popen([helper], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE) as process:
+                          stderr=subprocess.PIPE, env=environment) as process:
         replies = []
         for message in messages:
             payload = json.dumps(message).encode()

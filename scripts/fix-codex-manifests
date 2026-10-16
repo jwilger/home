@@ -27,6 +27,9 @@ def refresh(root):
         library['sha256'] = digest(voice / library['path'])
     runtime_path.write_text(json.dumps(runtime, indent=2) + '\n')
     manifest = json.loads(manifest_path.read_text())
+    wrapped = 'codex-resources/voice/bin/.codex-voice-host-wrapped'
+    if (root / wrapped).is_file():
+        manifest['sha256'][wrapped] = digest(root / wrapped)
     for name in manifest['sha256']:
         manifest['sha256'][name] = digest(root / name)
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')

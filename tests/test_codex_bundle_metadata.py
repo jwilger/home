@@ -15,6 +15,9 @@ class BundleMetadataTest(unittest.TestCase):
             root = pathlib.Path(temporary)
             voice = root / 'codex-resources/voice'
             (voice / 'lib').mkdir(parents=True)
+            (voice / 'bin').mkdir()
+            wrapped = voice / 'bin/.codex-voice-host-wrapped'
+            wrapped.write_bytes(b'patched voice ELF')
             library = voice / 'lib/test.so'
             library.write_bytes(b'patched ELF')
             runtime = voice / 'runtime.json'
@@ -30,8 +33,13 @@ class BundleMetadataTest(unittest.TestCase):
             self.assertEqual(data['sourceSha256'],'original-source')
             self.assertEqual(data['libraries'][0]['sha256'],hashlib.sha256(library.read_bytes()).hexdigest())
             self.assertEqual(json.loads(manifest.read_text())['sha256']['codex-resources/voice/runtime.json'],hashlib.sha256(runtime.read_bytes()).hexdigest())
+            self.assertEqual(json.loads(manifest.read_text())['sha256']['codex-resources/voice/bin/.codex-voice-host-wrapped'],
+                             hashlib.sha256(wrapped.read_bytes()).hexdigest())
             verify = [sys.executable, str(ROOT / 'scripts/fix-codex-manifests'), str(root), '--verify']
             self.assertEqual(subprocess.run(verify, capture_output=True).returncode, 0)
+            wrapped.write_bytes(b'corrupted voice ELF')
+            self.assertNotEqual(subprocess.run(verify, capture_output=True).returncode, 0)
+            wrapped.write_bytes(b'patched voice ELF')
             library.write_bytes(b'corrupted after refresh')
             self.assertNotEqual(subprocess.run(verify, capture_output=True).returncode, 0)
             for p, content in originals.items():
