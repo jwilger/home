@@ -6,6 +6,7 @@
 }:
 let
   codex = import ./package.nix { inherit pkgs; };
+  bili = import ./bili-package.nix { inherit pkgs; };
   rtk = import ./rtk.nix { inherit pkgs; };
   python = pkgs.python312.withPackages (p: [
     p.tomlkit
@@ -75,6 +76,11 @@ let
         };
         apps._default.enabled = true;
         mcp_servers = {
+          bili = {
+            command = "${bili}/bin/bili-mcp";
+            env.BILI_MCP_PROXY = "http://127.0.0.1:8787";
+            startup_timeout_sec = 120;
+          };
           serena = {
             command = lib.getExe serena;
             args = [
@@ -117,6 +123,7 @@ let
   };
 in
 {
+  imports = [ ./bili.nix ];
   options.jwilger.codex.reconcile = lib.mkOption {
     type = lib.types.package;
     readOnly = true;

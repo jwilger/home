@@ -134,6 +134,29 @@ orchestration only when that capability is available.
 
 Restart CLI sessions after activation to load the managed defaults and hooks.
 
+### Billion Context with the shared Codex daemon
+
+Home Manager runs a pinned Billion Context proxy as `bili.service` on
+`127.0.0.1:8787`. Its Codex MCP companion exposes reversible conversation
+compression, decompression, and context search. Continue using plain `codex`
+and `codex agents` from any shell; no `bili codex` launcher is needed.
+
+The managed `~/.codex/.env` routes Codex traffic through the persistent proxy
+and trusts its combined public-root/local-CA bundle. Other applications keep
+their own proxy settings, and the ChatGPT desktop's separate Codex home is
+unchanged. The proxy's private CA and session history remain in the user's
+data directory, outside the Nix store. The service uses a store configuration
+and disables self-updates; change the package pin to update it.
+
+After the first activation, check `systemctl --user status bili.service`, then
+run `codex app-server daemon restart` to load the new environment. Restarting
+interrupts attached sessions. A running daemon retains its previous environment
+until restarted. Do not use `bili codex`: its launcher forces embedded mode.
+The proxy must remain running while Codex uses it. Inspect its journal with
+`journalctl --user -u bili.service`; its local UI is
+`http://127.0.0.1:8787/__bili/`. Tool availability alone does not prove traffic
+is compressed; verify the proxy's session activity and compression state.
+
 ## ChatGPT desktop updates
 
 The `Update ChatGPT desktop` GitHub Action runs nightly at 09:23 UTC and can
