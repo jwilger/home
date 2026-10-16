@@ -182,7 +182,7 @@ let
         ]
       }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
       if [[ "$HINDSIGHT_API_LLM_API_KEY" == REPLACE_WITH_OPENAI_API_KEY ]]; then
-        echo "Replace the Hindsight OpenAI API key placeholder in 1Password." >&2
+        echo "Replace the HINDSIGHT_OPENAI_API_KEY placeholder in ~/.envrc." >&2
         exit 3
       fi
       exec node ${lib.escapeShellArg "${codingAgentRuntime}/daemon-start.js"} --harness codex
@@ -203,15 +203,31 @@ let
         exit 1
       fi
 
-      op_bin=${lib.escapeShellArg "${pkgs._1password-cli}/bin/op"}
-      if [[ -x /run/wrappers/bin/op ]]; then
-        op_bin=/run/wrappers/bin/op
+      # Systemd does not inherit direnv exports from interactive shells.
+      # Source the user-owned file only when the credential was not inherited.
+      if [[ -z "''${HINDSIGHT_OPENAI_API_KEY:-}" && -f "$HOME/.envrc" ]]; then
+        HINDSIGHT_OPENAI_API_KEY="$(
+          set +u
+          # shellcheck source=/dev/null
+          source "$HOME/.envrc" > /dev/null
+          printf '%s' "''${HINDSIGHT_OPENAI_API_KEY:-}"
+        )"
       fi
-
+      case "''${HINDSIGHT_OPENAI_API_KEY:-}" in
+        "" | REPLACE_WITH_* | op://*)
+          echo "Set HINDSIGHT_OPENAI_API_KEY in ~/.envrc before starting Hindsight." >&2
+          exit 1
+          ;;
+      esac
+      # This managed file contains provider/database settings, never secrets.
+      set -a
+      # shellcheck source=/dev/null
+      source ${lib.escapeShellArg credentialEnv}
+      set +a
+      export HINDSIGHT_API_LLM_API_KEY="$HINDSIGHT_OPENAI_API_KEY"
+      export HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="$HINDSIGHT_OPENAI_API_KEY"
       export HINDSIGHT_CONFIG=${lib.escapeShellArg daemonConfig}
-      exec "$op_bin" run --account MRECLJED3JFMFCCB6ZS3D5AIZU \
-        --env-file=${lib.escapeShellArg credentialEnv} -- \
-        ${lib.getExe launchDaemon}
+      exec ${lib.getExe launchDaemon}
     '';
   };
   importCodex = pkgs.writeShellApplication {
@@ -397,15 +413,13 @@ in
     apiPort = 9077;
   };
 
-  # This file contains a reference, not the credential. `op run` resolves it
-  # only for the daemon-start process and its child.
+  # Non-secret daemon settings. The startup wrapper exports the API keys
+  # separately from the user-owned ~/.envrc or inherited environment.
   home.file.".hindsight/openai.env".text = ''
-    HINDSIGHT_API_LLM_PROVIDER=openai
-    HINDSIGHT_API_LLM_API_KEY="op://Personal/Hindsight/OpenAI API key"
-    HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai
-    HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="op://Personal/Hindsight/OpenAI API key"
-    HINDSIGHT_API_RERANKER_PROVIDER=rrf
-    HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://${config.home.username}@/hindsight?host=${postgresSocket}&port=${postgresPort}"
+    export HINDSIGHT_API_LLM_PROVIDER=openai
+    export HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai
+    export HINDSIGHT_API_RERANKER_PROVIDER=rrf
+    export HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://${config.home.username}@/hindsight?host=${postgresSocket}&port=${postgresPort}"
   '';
 
   systemd.user.services = {
@@ -453,23 +467,15 @@ in
         Description = "Start the local Hindsight memory daemon";
         Wants = [
           "hindsight-postgres.service"
-          "tenkr-onepassword.service"
-          "tenkr-onepassword-cli.service"
         ];
         After = [
           "hindsight-postgres.service"
           "hindsight-codex-install.service"
           "hindsight-claude-install.service"
-          "tenkr-onepassword.service"
-          "tenkr-onepassword-cli.service"
         ];
       };
       Service = {
         Type = "oneshot";
-        Environment = [
-          "OP_BIOMETRIC_UNLOCK_ENABLED=true"
-          "OP_SOCK=%t/onepassword/op-daemon.sock"
-        ];
         ExecStart = lib.getExe startDaemon;
         # hindsight-embed deliberately detaches the API after startup.
         KillMode = "process";

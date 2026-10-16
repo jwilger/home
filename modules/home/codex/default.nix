@@ -31,19 +31,27 @@ let
         --no-python-downloads serena "$@"
     '';
   };
-  context7Env = pkgs.writeText "context7.env" ''
-    CONTEXT7_API_KEY="op://Employee/Context7/credential"
-  '';
   context7 = pkgs.writeShellApplication {
     name = "context7-codex-mcp";
     text = ''
-      op_bin=${lib.escapeShellArg "${pkgs._1password-cli}/bin/op"}
-      if [[ -x /run/wrappers/bin/op ]]; then
-        op_bin=/run/wrappers/bin/op
+      # MCP processes may inherit a reduced environment from the app-server.
+      # Read the user-owned exports directly; never unlock 1Password at startup.
+      if [[ -z "''${CONTEXT7_API_KEY:-}" && -f "$HOME/.envrc" ]]; then
+        CONTEXT7_API_KEY="$(
+          set +u
+          # shellcheck source=/dev/null
+          source "$HOME/.envrc" > /dev/null
+          printf '%s' "''${CONTEXT7_API_KEY:-}"
+        )"
       fi
-      export OP_BIOMETRIC_UNLOCK_ENABLED=true
-      exec "$op_bin" run --account QLLIV23RKJEOLAJMPOKP3NDMSU \
-        --env-file=${context7Env} -- ${lib.getExe pkgs.context7-mcp}
+      case "''${CONTEXT7_API_KEY:-}" in
+        "" | REPLACE_WITH_* | op://*)
+          echo "Set CONTEXT7_API_KEY in ~/.envrc before starting Context7." >&2
+          exit 1
+          ;;
+      esac
+      export CONTEXT7_API_KEY
+      exec ${lib.getExe pkgs.context7-mcp}
     '';
   };
   defaults = pkgs.writeText "codex-home-manager-defaults.json" (
@@ -97,7 +105,8 @@ let
           };
           context7 = {
             command = lib.getExe context7;
-            startup_timeout_sec = 120;
+            env_vars = [ "CONTEXT7_API_KEY" ];
+            startup_timeout_sec = 10;
           };
         };
       };
