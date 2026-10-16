@@ -37,7 +37,8 @@ in
   home.file.".codex/.env".text = ''
     HTTPS_PROXY=${origin}
     HTTP_PROXY=${origin}
-    NO_PROXY=localhost,127.0.0.1,::1
+    # Bili rejects realtime voice WebSocket upgrades; model traffic uses chatgpt.com.
+    NO_PROXY=localhost,127.0.0.1,::1,api.openai.com
     SSL_CERT_FILE=${config.xdg.dataHome}/billion-context/ca/combined-ca.pem
     BILI_MCP_PROXY=${origin}
   '';
