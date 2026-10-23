@@ -10,10 +10,10 @@ let
   # Hooks must never depend on the vendor's delete-then-copy staging directory.
   codingAgentPackage = pkgs.stdenvNoCC.mkDerivation {
     pname = "hindsight-coding-agents";
-    version = "0.8.1";
+    version = "0.8.2";
     src = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/@vectorize-io/hindsight-coding-agents/-/hindsight-coding-agents-0.8.1.tgz";
-      hash = "sha256:407abd66ba5d4603a460ecfe6795d47a0e0687439a800d4bc79305f2ee2f5e1b";
+      url = "https://registry.npmjs.org/@vectorize-io/hindsight-coding-agents/-/hindsight-coding-agents-0.8.2.tgz";
+      hash = "sha256-fII3nJkrQ4oxnazkrDpHs4Bj12aztlsdDVcFCvpQyIk=";
     };
     dontBuild = true;
     postPatch = ''
