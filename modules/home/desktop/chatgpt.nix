@@ -85,9 +85,23 @@ let
       # Node's cp preserves read-only Nix-store modes. The app subsequently
       # edits plugin manifests and removes staging directories, so make only
       # the private copies writable, without following symlinks back to source.
+      pluginCopyPattern='if\([[:alpha:]_$][[:alnum:]_$]*\.default\.platform!==`win32`\)\{await ([[:alpha:]_$][[:alnum:]_$]*)\.default\.cp\([[:alpha:]_$][[:alnum:]_$]*,([[:alpha:]_$][[:alnum:]_$]*),\{recursive:!0,verbatimSymlinks:!0\}\);return'
+      mapfile -t pluginCopyBranches < <(grep -hoE "$pluginCopyPattern" app/.vite/build/main-*.js)
+      if (( ''${#pluginCopyBranches[@]} != 1 )); then
+        echo "Expected exactly one non-Windows plugin copy branch, found ''${#pluginCopyBranches[@]}" >&2
+        exit 1
+      fi
+      pluginCopyBranch="''${pluginCopyBranches[0]}"
+      if [[ ! "$pluginCopyBranch" =~ $pluginCopyPattern ]]; then
+        echo "Failed to parse the non-Windows plugin copy branch" >&2
+        exit 1
+      fi
+      fsModule="''${BASH_REMATCH[1]}"
+      destination="''${BASH_REMATCH[2]}"
+      copyOnly="''${pluginCopyBranch%;return}"
+      writablePluginCopy="$copyOnly;await(async function writable(p){let s=await $fsModule.default.lstat(p);if(s.isSymbolicLink())return;await $fsModule.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await $fsModule.default.readdir(p))await writable(p+\"/\"+name)})($destination);return"
       substituteInPlace app/.vite/build/main-*.js \
-        --replace-fail 'await k.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});return' \
-        'await k.default.cp(e,t,{recursive:!0,verbatimSymlinks:!0});await(async function writable(p){let s=await k.default.lstat(p);if(s.isSymbolicLink())return;await k.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await k.default.readdir(p))await writable(p+"/"+name)})(t);return'
+        --replace-fail "$pluginCopyBranch" "$writablePluginCopy"
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
