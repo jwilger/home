@@ -1,10 +1,10 @@
 { pkgs }:
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "billion-context";
-  version = "0.1.197";
+  version = "0.1.204";
   src = pkgs.fetchurl {
     url = "https://registry.npmjs.org/billion-context/-/billion-context-${version}.tgz";
-    hash = "sha256-Vh3pZrVTV38z+1r0HICstuLK2iGx7ck6suZn082+L2Y=";
+    hash = "sha256-ftwWrlzk5e5oEw5wajEqm/QW1fDY4f3RuhZV+UXDLXU=";
   };
   nativeBuildInputs = [ pkgs.makeWrapper ];
   dontBuild = true;
