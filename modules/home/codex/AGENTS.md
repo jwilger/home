@@ -36,3 +36,27 @@ Respect an explicit approval rejection. Continue unaffected work and safe altern
   fields, and relevant failures. Expand to raw output when summaries omit evidence
   needed for correctness. Keep tool configuration stable within a session to
   preserve prompt caching.
+
+## Development-system execution and evidence
+
+- Before any implementation/test edit in a development-system repository, read
+  its workflow router and every linked specialist contract applicable to the
+  next action, including change preflight, delivery and TDD. A router or summary
+  is not the complete contract. Resolve required delegation before editing.
+- Advisory authority describes tool enforcement; it does not waive instructions.
+  Follow the installed contract even when ordinary tools permit skipping a gate.
+- For RED-applicable behavior, use one failing public behavior and its smallest
+  paired implementation at a time. Setup/compilation errors alone do not prove
+  behavioral RED. Test each edit immediately and complete its checkpoint before
+  starting another behavior.
+- When TDD requires lightweight review, actually run the fresh-context independent
+  reviewer using the applicable model-routing policy. Retain the reviewer ID,
+  exact reviewed scope, result and disposition before claiming that gate passed.
+  Skill-required delegation is permitted despite general restrictions on
+  unsolicited subagents. Self-review, a parent-written pass note, passing hooks
+  and checkpoint acceptance never substitute for that reviewer.
+- If required scrutiny is missing or unavailable, report the unmet gate and stop
+  advancement through it. Preserve commits and historical records; use supported
+  recovery. Later review cannot retroactively establish an earlier review.
+- Report configuration separately from evidenced workflow compliance. Make the
+  current RED/GREEN/review/checkpoint phase and actual reviewer result visible.
