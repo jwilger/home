@@ -188,11 +188,11 @@
     },
     "nixpkgs-small": {
       "locked": {
-        "lastModified": 1792430821,
-        "narHash": "sha256-ccvCOsDJzyPAT+uGJGaNHYCqT/KeVtM2pgoXm5QUflA=",
+        "lastModified": 1792617723,
+        "narHash": "sha256-IyFA94SfEEqeru/RZyRRbmk8gtBejDTiojSReKzUOc8=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "07b58be58c16d91ee16ad6bb648bc2ad969edac1",
+        "rev": "dce1caf58d1a943af38b376e824a0d036ec3eea7",
         "type": "github"
       },
       "original": {
@@ -204,11 +204,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1792422028,
-        "narHash": "sha256-qVt97ILUu2DorFGGEi+mqVuzOF8R18fQLgFkHiLrNfE=",
+        "lastModified": 1792615934,
+        "narHash": "sha256-MlvRfa1O5Cqc2/a+gG+l9TSuowEoCKCmrJ1d9oAVm0I=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "f3a73bcf5d1c5b75a66cf35a48957e30d41d647a",
+        "rev": "da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36",
         "type": "github"
       },
       "original": {
@@ -252,11 +252,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1792436598,
-        "narHash": "sha256-UbkKiq/ifhvJfdzXWwZpH8FthECKFMebZFrhup7ptus=",
+        "lastModified": 1792720955,
+        "narHash": "sha256-P4U8Ga6eN/vvMK8ROGQdS+/5i7NvC2xs2vHN5ZxSB3E=",
         "owner": "noctalia-dev",
         "repo": "noctalia",
-        "rev": "d9bcdc437c4a65686da8f5647f3dca9d963ece9d",
+        "rev": "375248f7151d9f908bc7134763c9850c94d1598e",
         "type": "github"
       },
       "original": {
@@ -269,17 +269,17 @@
     "noctalia-plugins": {
       "flake": false,
       "locked": {
-        "lastModified": 1792109483,
-        "narHash": "sha256-wWaWs6cUpTq0oAXVB1+6zNlZp0hrDmSut0Spf9jMHEI=",
+        "lastModified": 1792702552,
+        "narHash": "sha256-jxcqW7PWsqxDhx149UxR/9P/xhDhAl/oB2qXiqfM3Zg=",
         "owner": "noctalia-dev",
         "repo": "community-plugins",
-        "rev": "03414083ae64b268dbef123c7296cf5d690fa223",
+        "rev": "bb30b4a5b634c8a8dfea01a05e8d8f9389254236",
         "type": "github"
       },
       "original": {
         "owner": "noctalia-dev",
         "repo": "community-plugins",
-        "rev": "03414083ae64b268dbef123c7296cf5d690fa223",
+        "rev": "bb30b4a5b634c8a8dfea01a05e8d8f9389254236",
         "type": "github"
       }
     },

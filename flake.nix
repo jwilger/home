@@ -22,7 +22,7 @@
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     noctalia-plugins = {
       # Pin community plugins alongside the Noctalia shell update.
-      url = "github:noctalia-dev/community-plugins/03414083ae64b268dbef123c7296cf5d690fa223";
+      url = "github:noctalia-dev/community-plugins/bb30b4a5b634c8a8dfea01a05e8d8f9389254236";
       flake = false;
     };
     zjstatus.url = "github:dj95/zjstatus/v0.25.0";
