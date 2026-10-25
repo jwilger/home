@@ -1,8 +1,11 @@
-{ ... }:
+{ pkgs, ... }:
 {
   programs.lazygit = {
     enable = true;
     settings = {
+      # Lazygit shell-quotes {{text}}. Write OSC 52 to the controlling terminal,
+      # not captured command stdout or a stale server-local Wayland clipboard.
+      os.copyToClipboardCmd = ''printf '\033]52;c;%s\a' "$(printf '%s' {{text}} | ${pkgs.coreutils}/bin/base64 -w0)" > /dev/tty'';
       gui = {
         # Use catppuccin theme colors to match the rest of the system
         theme = {

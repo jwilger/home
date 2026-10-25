@@ -7,6 +7,8 @@
     # Keep defaults, but add language entries to wire formatters/LSPs with correct placeholders.
     settings = {
       editor = {
+        # WezTerm owns the clipboard locally and over SSH; paste via the terminal.
+        clipboard-provider = "termcode";
         text-width = 80;
         indent-guides = {
           render = true;

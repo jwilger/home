@@ -121,6 +121,37 @@
       };
 
       checks.${system} = {
+        tmux-clipboard =
+          let
+            homeConfig = self.homeConfigurations."jwilger@gregor".config;
+          in
+          pkgs.runCommand "check-tmux-clipboard"
+            {
+              nativeBuildInputs = [
+                pkgs.tmux
+                pkgs.python3
+                pkgs.coreutils
+                pkgs.bash
+                pkgs.helix
+                pkgs.lazygit
+                pkgs.git
+                pkgs.delta
+              ];
+              TMUX_CLIPBOARD_CONFIG = homeConfig.xdg.configFile."tmux/tmux.conf".source;
+              HELIX_CLIPBOARD_CONFIG = homeConfig.xdg.configFile."helix/config.toml".source;
+              LAZYGIT_CLIPBOARD_CONFIG =
+                homeConfig.home.file."${homeConfig.xdg.configHome}/lazygit/config.yml".source;
+            }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              # Upstream tmux plugins use /usr/bin/env bash, absent in the sandbox.
+              # Use the same interpreter explicitly; retain every generated command.
+              sed -E 's@^run-shell (/nix/store/.*[.]tmux)$@run-shell "${pkgs.bash}/bin/bash \1"@' \
+                "$TMUX_CLIPBOARD_CONFIG" > tmux-test.conf
+              export TMUX_CLIPBOARD_CONFIG="$PWD/tmux-test.conf"
+              ${pkgs.python3}/bin/python3 ${./tests/test_tmux_clipboard.py} -v
+              touch "$out"
+            '';
         hyprland-pointer-adapter =
           pkgs.runCommand "check-hyprland-pointer-adapter"
             {

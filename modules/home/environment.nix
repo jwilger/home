@@ -18,6 +18,9 @@ in
     NPM_CONFIG_PREFIX = npmPrefix;
     NODE_PATH = "${npmPrefix}/lib/node_modules";
     PYTHONUSERBASE = "${config.home.homeDirectory}/.local";
+    # Persistent tmux may retain local display state and lack SSH markers.
+    # Pi should also send copies to the attached terminal (native copy remains).
+    PI_CLIPBOARD_OSC52 = "1";
 
     # Keep Cargo's default workspace-local target directory. The projects
     # tree is a nested btrfs subvolume excluded from home snapshots, and

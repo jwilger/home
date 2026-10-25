@@ -81,7 +81,6 @@ in
           set -g @floax-change-path 'true'
         '';
       }
-      yank
       pain-control
       sessionist
       {
@@ -102,8 +101,28 @@ in
       set -g extended-keys on
       set -g extended-keys-format csi-u
 
-      # Allow programs inside tmux to copy through OSC-52.
+      # Copy to the attached terminal (also over SSH), never the server's wl-copy.
+      # WezTerm advertises xterm-256color; explicitly enable its OSC 52 capability.
+      set -as terminal-features ',xterm-256color:clipboard'
       set -g set-clipboard on
+      # Some TUIs wrap OSC 52 in tmux DCS; allow it from visible panes only.
+      set -g allow-passthrough on
+      set -s copy-command ""
+      # Remove tmux-yank shortcuts left behind when reloading an existing server.
+      unbind -T prefix y
+      unbind -T prefix Y
+      unbind -T copy-mode-vi Y
+      unbind -T copy-mode-vi M-y
+      unbind -T copy-mode-vi !
+      unbind -T copy-mode y
+      unbind -T copy-mode Y
+      unbind -T copy-mode M-y
+      unbind -T copy-mode !
+      bind -T copy-mode-vi v send -X begin-selection
+      bind -T copy-mode-vi y send -X copy-selection-and-cancel
+      bind -T copy-mode-vi Enter send -X copy-selection-and-cancel
+      bind -T copy-mode-vi MouseDragEnd1Pane send -X copy-selection-and-cancel
+      bind -T copy-mode MouseDragEnd1Pane send -X copy-selection-and-cancel
 
       # Renumber windows when one is closed
       set -g renumber-windows on
