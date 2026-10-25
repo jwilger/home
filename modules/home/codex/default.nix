@@ -28,7 +28,7 @@ let
         ]
       }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
       exec uv tool run --from serena-agent==1.7.0 --python ${pkgs.python312}/bin/python3 \
-        --no-python-downloads serena "$@"
+        --no-python-downloads python ${../../../scripts/serena-bootstrap.py} "$@"
     '';
   };
   context7 = pkgs.writeShellApplication {
