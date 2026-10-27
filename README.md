@@ -196,12 +196,21 @@ Home Manager switch, run `systemctl --user start voxtype.service`.
 ## Hindsight memory
 
 Home Manager configures a local Hindsight daemon and installs its Codex hooks,
-MCP server, and agent skill. The OpenAI key is read at daemon startup from the
-`OpenAI API key` field of the `Hindsight` item in the Personal 1Password vault
-of account `MRECLJED3JFMFCCB6ZS3D5AIZU`. Replace the
-`REPLACE_WITH_OPENAI_API_KEY` placeholder in that field; no key is stored in
-this repository or the Nix store. The same key powers extraction and OpenAI
-embeddings, which incur API usage; retrieval uses RRF without a local reranker.
+MCP server, and agent skill. All inference runs on the MacBook Pro M4's Ollama
+server at `http://100.98.58.77:11434` over Tailscale:
+
+- LLM operations: `qwen3-coder:30b` using the Ollama provider.
+- Embeddings: `qwen3-embedding:0.6b`, 1,024 dimensions, through Ollama's
+  OpenAI-compatible `/v1` API. The provider name `openai` here describes the
+  protocol; requests do not go to OpenAI.
+- Retrieval: RRF without a paid reranker.
+
+There is no hosted fallback and no OpenAI credential is needed. The Mac must stay
+awake, connected to Tailscale, and running Ollama. If it is unavailable, memory
+operations fail rather than spend money. The legacy `~/.hindsight/openai.env`
+filename is retained, but now contains only local inference/database settings.
+See [the migration runbook](docs/hindsight-local-models.md) before switching an
+existing database to a different embedding model.
 Hindsight uses a Home Manager-managed PostgreSQL 18 instance with pgvector in
 `~/.local/share/hindsight/postgres`, accessible only through a private Unix
 socket. It does not use Hindsight's bundled PostgreSQL or the system NixOS

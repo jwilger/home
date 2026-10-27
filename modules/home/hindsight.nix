@@ -181,10 +181,6 @@ let
           pkgs.xz
         ]
       }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-      if [[ "$HINDSIGHT_API_LLM_API_KEY" == REPLACE_WITH_OPENAI_API_KEY ]]; then
-        echo "Replace the HINDSIGHT_OPENAI_API_KEY placeholder in ~/.envrc." >&2
-        exit 3
-      fi
       exec node ${lib.escapeShellArg "${codingAgentRuntime}/daemon-start.js"} --harness codex
     '';
   };
@@ -203,29 +199,12 @@ let
         exit 1
       fi
 
-      # Systemd does not inherit direnv exports from interactive shells.
-      # Source the user-owned file only when the credential was not inherited.
-      if [[ -z "''${HINDSIGHT_OPENAI_API_KEY:-}" && -f "$HOME/.envrc" ]]; then
-        HINDSIGHT_OPENAI_API_KEY="$(
-          set +u
-          # shellcheck source=/dev/null
-          source "$HOME/.envrc" > /dev/null
-          printf '%s' "''${HINDSIGHT_OPENAI_API_KEY:-}"
-        )"
-      fi
-      case "''${HINDSIGHT_OPENAI_API_KEY:-}" in
-        "" | REPLACE_WITH_* | op://*)
-          echo "Set HINDSIGHT_OPENAI_API_KEY in ~/.envrc before starting Hindsight." >&2
-          exit 1
-          ;;
-      esac
-      # This managed file contains provider/database settings, never secrets.
+      # No paid credentials or shell startup files are needed. The legacy
+      # filename now contains only local inference/database settings.
       set -a
       # shellcheck source=/dev/null
       source ${lib.escapeShellArg credentialEnv}
       set +a
-      export HINDSIGHT_API_LLM_API_KEY="$HINDSIGHT_OPENAI_API_KEY"
-      export HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY="$HINDSIGHT_OPENAI_API_KEY"
       export HINDSIGHT_CONFIG=${lib.escapeShellArg daemonConfig}
       exec ${lib.getExe launchDaemon}
     '';
@@ -413,13 +392,33 @@ in
     apiPort = 9077;
   };
 
-  # Non-secret daemon settings. The startup wrapper exports the API keys
-  # separately from the user-owned ~/.envrc or inherited environment.
+  # Keep the legacy filename so existing installations replace it in place.
+  # "openai" below names the wire protocol, not a hosted provider.
   home.file.".hindsight/openai.env".text = ''
-    export HINDSIGHT_API_LLM_PROVIDER=openai
+    export HINDSIGHT_API_LLM_PROVIDER=ollama
+    export HINDSIGHT_API_LLM_MODEL=qwen3-coder:30b
+    export HINDSIGHT_API_LLM_BASE_URL=http://100.98.58.77:11434
+    export HINDSIGHT_API_LLM_API_KEY=ollama
+    export HINDSIGHT_API_LLM_OLLAMA_NUM_CTX=32768
+    export HINDSIGHT_API_LLM_MAX_CONCURRENT=1
+    export HINDSIGHT_API_LLM_TIMEOUT=600
+    export HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS=8192
     export HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL=http://100.98.58.77:11434/v1
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL=qwen3-embedding:0.6b
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY=ollama
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS=1024
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_BATCH_SIZE=8
+    export HINDSIGHT_API_EMBEDDINGS_MAX_CONCURRENT_REQUESTS=1
     export HINDSIGHT_API_RERANKER_PROVIDER=rrf
     export HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://${config.home.username}@/hindsight?host=${postgresSocket}&port=${postgresPort}"
+    # Reset per-operation profile settings; every operation uses the same Mac.
+    ${lib.concatMapStringsSep "\n" (operation: ''
+      export HINDSIGHT_API_${operation}_LLM_PROVIDER=ollama
+      export HINDSIGHT_API_${operation}_LLM_MODEL=qwen3-coder:30b
+      export HINDSIGHT_API_${operation}_LLM_BASE_URL=http://100.98.58.77:11434
+      export HINDSIGHT_API_${operation}_LLM_API_KEY=ollama
+    '') [ "RETAIN" "REFLECT" "CONSOLIDATION" "MENTAL_MODEL_REFRESH" ]}
   '';
 
   systemd.user.services = {

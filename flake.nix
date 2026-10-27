@@ -222,12 +222,39 @@
                 ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
                 jq -e '.serverMode == "daemon" and .apiPort == 9077' \
                   "$homeFiles/.hindsight/daemon.json" >/dev/null
-                grep -Fq 'HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai' \
-                  "$homeFiles/.hindsight/openai.env"
-                grep -Fq 'HINDSIGHT_API_RERANKER_PROVIDER=rrf' \
-                  "$homeFiles/.hindsight/openai.env"
-                grep -Fq 'HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://' \
-                  "$homeFiles/.hindsight/openai.env"
+                # Exercise the generated shell environment, not its formatting.
+                (
+                  # A previous daemon profile can contain paid per-operation routes.
+                  for operation in RETAIN REFLECT CONSOLIDATION MENTAL_MODEL_REFRESH; do
+                    for field in PROVIDER MODEL BASE_URL API_KEY; do
+                      export "HINDSIGHT_API_''${operation}_LLM_''${field}=stale-profile-value"
+                    done
+                  done
+                  source "$homeFiles/.hindsight/openai.env"
+                  for operation in RETAIN REFLECT CONSOLIDATION MENTAL_MODEL_REFRESH; do
+                    provider="HINDSIGHT_API_''${operation}_LLM_PROVIDER"
+                    model="HINDSIGHT_API_''${operation}_LLM_MODEL"
+                    base_url="HINDSIGHT_API_''${operation}_LLM_BASE_URL"
+                    api_key="HINDSIGHT_API_''${operation}_LLM_API_KEY"
+                    test "''${!provider}" = ollama
+                    test "''${!model}" = qwen3-coder:30b
+                    test "''${!base_url}" = http://100.98.58.77:11434
+                    test "''${!api_key}" = ollama
+                  done
+                  test "$HINDSIGHT_API_LLM_PROVIDER" = ollama
+                  test "$HINDSIGHT_API_LLM_MODEL" = qwen3-coder:30b
+                  test "$HINDSIGHT_API_LLM_BASE_URL" = http://100.98.58.77:11434
+                  test "$HINDSIGHT_API_EMBEDDINGS_PROVIDER" = openai
+                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL" = http://100.98.58.77:11434/v1
+                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL" = qwen3-embedding:0.6b
+                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY" = ollama
+                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS" = 1024
+                  test "$HINDSIGHT_API_RERANKER_PROVIDER" = rrf
+                  case "$HINDSIGHT_EMBED_API_DATABASE_URL" in
+                    postgresql://*/hindsight\?host=*\&port=5436) ;;
+                    *) exit 1 ;;
+                  esac
+                )
 
                 test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
                 test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
