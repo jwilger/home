@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Repair Nix-store modes on the desktop executor's private plugin copy."""
+import pathlib
+import re
+import sys
+
+IDENTIFIER = r'[A-Za-z_$][A-Za-z0-9_$]*'
+COPY = re.compile(
+    rf'(?P<prefix>async function {IDENTIFIER}\(\{{executorPluginRoot:'
+    rf'(?P<destination>{IDENTIFIER}),resourcesPath:(?P<resources>{IDENTIFIER})\}}\)'
+    rf'\{{let (?P<entry>{IDENTIFIER})=await {IDENTIFIER}\('
+    rf'\{{useWsl:!1,resourcesPath:(?P=resources)\}}\);'
+    rf'return (?P=entry)==null\?null:\()'
+    rf'(?P<copy>await (?P<fs>{IDENTIFIER})\.default\.cp\('
+    rf'(?P=entry)\.cwd,(?P=destination),\{{recursive:!0\}}\))'
+)
+
+
+def main():
+    paths = [pathlib.Path(arg) for arg in sys.argv[1:]]
+    sources = {path: path.read_text() for path in paths}
+    matches = [(path, match) for path, source in sources.items()
+               for match in COPY.finditer(source)]
+    if len(matches) != 1:
+        raise SystemExit(f'Expected exactly one executor plugin copy, found {len(matches)}')
+    path, match = matches[0]
+    fs = match['fs'] + '.default'
+    destination = match['destination']
+    # Node fs.cp preserves immutable package modes. Repair an old copy before
+    # overwrite, then repair the new copy before the app rewrites .mcp.json.
+    # lstat avoids chmod through a symlink into a package or unrelated file.
+    source_root = match['entry'] + '.cwd'
+    replacement = match['prefix'] + (
+        'await(async()=>{'
+        'async function walk(p,writable,allowMissing=!1){let s;'
+        f'try{{s=await {fs}.lstat(p)}}catch(err){{if(allowMissing&&err.code===`ENOENT`)return;throw err}}'
+        'if(s.isSymbolicLink()||(!s.isDirectory()&&!s.isFile()))'
+        'throw Error(`Unsafe executor plugin entry`);'
+        f'if(writable)await {fs}.chmod(p,s.mode|128);'
+        f'if(s.isDirectory())for(let name of await {fs}.readdir(p))await walk(p+`/`+name,writable)'
+        '}'
+        # Reject symlinked ancestors too; lstat(root) alone cannot detect them.
+        f'for(let p={destination}.slice(0,{destination}.lastIndexOf(`/`));p;p=p.slice(0,p.lastIndexOf(`/`)))'
+        f'{{let s;try{{s=await {fs}.lstat(p)}}catch(err){{if(err.code===`ENOENT`)continue;throw err}}'
+        'if(!s.isDirectory()||s.isSymbolicLink())throw Error(`Unsafe executor plugin parent`)}'
+        f'await walk({source_root},!1);'
+        f'await walk({destination},!1,!0);await walk({destination},!0,!0);'
+        f'await {fs}.cp({source_root},{destination},{{recursive:!0,verbatimSymlinks:!0}});'
+        f'await walk({destination},!0)'
+        '})()'
+    )
+    source = sources[path]
+    path.write_text(source[:match.start()] + replacement + source[match.end():])
+
+
+if __name__ == '__main__':
+    main()

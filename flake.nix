@@ -187,6 +187,13 @@
           ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_hyprland_control_probe.py'
           touch "$out"
         '';
+        chatgpt-executor =
+          pkgs.runCommand "check-chatgpt-executor" { nativeBuildInputs = [ pkgs.nodejs_22 ]; }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              ${pkgs.python3}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_chatgpt_executor_patch.py'
+              touch "$out"
+            '';
         codex-configuration =
           let
             python = pkgs.python312.withPackages (p: [

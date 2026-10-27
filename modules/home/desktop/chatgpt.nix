@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   chatgpt = pkgs.stdenv.mkDerivation rec {
     pname = "chatgpt";
@@ -14,6 +19,7 @@ let
       autoPatchelfHook
       dpkg
       makeWrapper
+      python3
     ];
 
     buildInputs = with pkgs; [
@@ -102,6 +108,9 @@ let
       writablePluginCopy="$copyOnly;await(async function writable(p){let s=await $fsModule.default.lstat(p);if(s.isSymbolicLink())return;await $fsModule.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await $fsModule.default.readdir(p))await writable(p+\"/\"+name)})($destination);return"
       substituteInPlace app/.vite/build/main-*.js \
         --replace-fail "$pluginCopyBranch" "$writablePluginCopy"
+      # The Local Work executor has a separate copy path, which must also
+      # repair copies left read-only by an earlier app version before refresh.
+      python3 ${../../../scripts/patch-chatgpt-executor} app/.vite/build/main-*.js
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
