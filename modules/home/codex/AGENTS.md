@@ -1,5 +1,6 @@
 ## Context helpers
 
+- Always make the first step of any plan be to set a goal for the completion of said plan.
 - Use RTK for supported noisy shell commands. The native hook normally rewrites
   them automatically; use `rtk proxy <command>` when full output is needed.
 - Use billion-context to summarize consumed context when useful. Preserve open
