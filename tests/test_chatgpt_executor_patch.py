@@ -19,9 +19,18 @@ class ExecutorPatchTest(unittest.TestCase):
                                str(bundle)], text=True, capture_output=True)
 
     def test_copy_and_refresh_readonly_private_tree(self):
+        self.exercise_copy(FIXTURE)
+
+    def test_copy_and_refresh_with_current_bundle_imports(self):
+        fixture = FIXTURE.replace('n==null', 'null==n').replace(
+            'j.default.', 'k().'
+        ).replace('const j={default:fs};', '')
+        self.exercise_copy(fixture)
+
+    def exercise_copy(self, fixture):
         with tempfile.TemporaryDirectory() as tmp:
             bundle = pathlib.Path(tmp)/'main-test.js'
-            bundle.write_text(FIXTURE)
+            bundle.write_text(fixture)
             patched = self.patch(bundle)
             self.assertEqual(patched.returncode, 0, patched.stderr)
             harness = r'''
@@ -70,7 +79,7 @@ main().catch(e=>{console.error(e);process.exitCode=1});
             import os
             env = dict(os.environ, PATCHED=bundle.read_text())
             # The fixture refers to the same fs alias used in the bundle.
-            harness = harness.replace('const Rc=async()', 'const j={default:fs};const Rc=async()')
+            harness = harness.replace('const Rc=async()', 'const j={default:fs},k=()=>fs;const Rc=async()')
             result = subprocess.run(['node', '-e', harness, 'fixture', tmp],
                                     env=env, text=True, capture_output=True)
             # Always restore directory permissions for TemporaryDirectory cleanup.

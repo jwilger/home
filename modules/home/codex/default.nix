@@ -12,50 +12,9 @@ let
     p.tomlkit
     p.ruamel-yaml
   ]);
-  serena = pkgs.writeShellApplication {
-    name = "serena";
-    runtimeInputs = [ pkgs.uv ];
-    text = ''
-      # UV installs a version-pinned runtime in its user cache. Native wheels
-      # need these libraries on NixOS; project LSPs remain in project shells.
-      export LD_LIBRARY_PATH=${
-        lib.makeLibraryPath [
-          pkgs.stdenv.cc.cc.lib
-          pkgs.zlib
-          pkgs.zstd
-          pkgs.openssl
-          pkgs.libffi
-        ]
-      }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-      exec uv tool run --from serena-agent==1.7.0 --python ${pkgs.python312}/bin/python3 \
-        --no-python-downloads python ${../../../scripts/serena-bootstrap.py} "$@"
-    '';
-  };
-  context7 = pkgs.writeShellApplication {
-    name = "context7-codex-mcp";
-    text = ''
-      # MCP processes may inherit a reduced environment from the app-server.
-      # Read the user-owned exports directly; never unlock 1Password at startup.
-      if [[ -z "''${CONTEXT7_API_KEY:-}" && -f "$HOME/.envrc" ]]; then
-        CONTEXT7_API_KEY="$(
-          set +u
-          # shellcheck source=/dev/null
-          source "$HOME/.envrc" > /dev/null
-          printf '%s' "''${CONTEXT7_API_KEY:-}"
-        )"
-      fi
-      case "''${CONTEXT7_API_KEY:-}" in
-        "" | REPLACE_WITH_* | op://*)
-          echo "Set CONTEXT7_API_KEY in ~/.envrc before starting Context7." >&2
-          exit 1
-          ;;
-      esac
-      export CONTEXT7_API_KEY
-      exec ${lib.getExe pkgs.context7-mcp}
-    '';
-  };
   defaults = pkgs.writeText "codex-home-manager-defaults.json" (
     builtins.toJSON {
+      lean_cli = true;
       settings = {
         model = "gpt-6.1-sol";
         model_reasoning_effort = "low";
@@ -79,35 +38,25 @@ let
         tui.status_line_use_colors = true;
         features = {
           hooks = true;
-          apps = true;
-          remote_plugin = true;
+          apps = false;
+          plugins = false;
+          remote_plugin = false;
+          recommended_plugins = false;
+          memories = false;
         };
-        apps._default.enabled = true;
+        apps._default.enabled = false;
+        memories = {
+          generate_memories = false;
+          use_memories = false;
+        };
+        skills.bundled.enabled = false;
         mcp_servers = {
           bili = {
             command = "${bili}/bin/bili-mcp";
             env.BILI_MCP_PROXY = "http://127.0.0.1:8787";
             startup_timeout_sec = 120;
           };
-          serena = {
-            command = lib.getExe serena;
-            args = [
-              "start-mcp-server"
-              "--context"
-              "codex"
-              "--project-from-cwd"
-              "--open-web-dashboard"
-              "false"
-              "--enable-gui-log-window"
-              "false"
-            ];
-            startup_timeout_sec = 120;
-          };
-          context7 = {
-            command = lib.getExe context7;
-            env_vars = [ "CONTEXT7_API_KEY" ];
-            startup_timeout_sec = 10;
-          };
+
         };
       };
       retired_features = [
@@ -116,11 +65,7 @@ let
       ];
       rtk_command = "${lib.getExe rtk} hook codex";
       codex_executable = lib.getExe codex;
-      serena_settings = {
-        web_dashboard_open_on_launch = false;
-        gui_log_window = false;
-      };
-      serena_trust = [ "${config.home.homeDirectory}/src/**" ];
+
     }
   );
   reconcile = pkgs.writeShellApplication {
@@ -155,9 +100,6 @@ in
     '';
     home.packages = [
       rtk
-      serena
-      pkgs.context7-mcp
-      context7
       reconcile
     ];
     # The runtime and its installers write config.toml/hooks.json. Activation
@@ -165,16 +107,5 @@ in
     home.activation.codexDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run ${lib.getExe reconcile}
     '';
-    systemd.user.services.serena-runtime-install = {
-      Unit.Description = "Prepare the pinned Serena runtime";
-      Service = {
-        Type = "oneshot";
-        ExecStart = "${lib.getExe serena} --help";
-        TimeoutStartSec = "10min";
-        Restart = "on-failure";
-        RestartSec = "5min";
-      };
-      Install.WantedBy = [ "default.target" ];
-    };
   };
 }

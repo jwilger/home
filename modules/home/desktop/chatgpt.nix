@@ -7,11 +7,11 @@
 let
   chatgpt = pkgs.stdenv.mkDerivation rec {
     pname = "chatgpt";
-    version = "26.1023.51421";
+    version = "26.1027.51404";
 
     src = pkgs.fetchurl {
       url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-      hash = "sha256-RITcK1T8CXi+sjuNjXF0lOTgtPvqsKh2c5EF5QtE3lo=";
+      hash = "sha256-RvHiLQKGmP6e2u/VhHrs4HxFCaMNNwnhBCIHGdjBKCI=";
     };
 
     nativeBuildInputs = with pkgs; [
@@ -86,13 +86,19 @@ let
 
       asar extract "$out/lib/chatgpt/resources/app.asar" app
       substituteInPlace app/.vite/build/worker.js \
-        --replace-fail 'async start(){if(this.disposed)return;if(this.logger.info(`Starting git repo watcher`),' \
-        'async start(){return;if(this.disposed)return;if(this.logger.info(`Starting git repo watcher`),'
+        --replace-fail 'async start(){if(this.disposed)return;if(this.logger.info("Starting git repo watcher"),' \
+        'async start(){return;if(this.disposed)return;if(this.logger.info("Starting git repo watcher"),'
       # Node's cp preserves read-only Nix-store modes. The app subsequently
       # edits plugin manifests and removes staging directories, so make only
       # the private copies writable, without following symlinks back to source.
-      pluginCopyPattern='if\([[:alpha:]_$][[:alnum:]_$]*\.default\.platform!==`win32`\)\{await ([[:alpha:]_$][[:alnum:]_$]*)\.default\.cp\([[:alpha:]_$][[:alnum:]_$]*,([[:alpha:]_$][[:alnum:]_$]*),\{recursive:!0,verbatimSymlinks:!0\}\);return'
-      mapfile -t pluginCopyBranches < <(grep -hoE "$pluginCopyPattern" app/.vite/build/main-*.js)
+      pluginCopyPattern='if\("win32"!==[[:alpha:]_$][[:alnum:]_$]*\(\)\.platform\)return void await ([[:alpha:]_$][[:alnum:]_$]*\(\))\.cp\([[:alpha:]_$][[:alnum:]_$]*,([[:alpha:]_$][[:alnum:]_$]*),\{recursive:!0,verbatimSymlinks:!0\}\);'
+      mapfile -t pluginCopyFiles < <(grep -lE "$pluginCopyPattern" app/.vite/build/*.js)
+      if (( ''${#pluginCopyFiles[@]} != 1 )); then
+        echo "Expected exactly one plugin copy bundle, found ''${#pluginCopyFiles[@]}" >&2
+        exit 1
+      fi
+      pluginCopyFile="''${pluginCopyFiles[0]}"
+      mapfile -t pluginCopyBranches < <(grep -hoE "$pluginCopyPattern" "$pluginCopyFile")
       if (( ''${#pluginCopyBranches[@]} != 1 )); then
         echo "Expected exactly one non-Windows plugin copy branch, found ''${#pluginCopyBranches[@]}" >&2
         exit 1
@@ -104,13 +110,14 @@ let
       fi
       fsModule="''${BASH_REMATCH[1]}"
       destination="''${BASH_REMATCH[2]}"
-      copyOnly="''${pluginCopyBranch%;return}"
-      writablePluginCopy="$copyOnly;await(async function writable(p){let s=await $fsModule.default.lstat(p);if(s.isSymbolicLink())return;await $fsModule.default.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await $fsModule.default.readdir(p))await writable(p+\"/\"+name)})($destination);return"
-      substituteInPlace app/.vite/build/main-*.js \
+      copyOnly="''${pluginCopyBranch#*return void }"
+      copyCondition="''${pluginCopyBranch%return void *}"
+      writablePluginCopy="$copyCondition{$copyOnly await(async function writable(p){let s=await $fsModule.lstat(p);if(s.isSymbolicLink())return;await $fsModule.chmod(p,s.mode|128);if(s.isDirectory())for(let name of await $fsModule.readdir(p))await writable(p+\"/\"+name)})($destination);return}"
+      substituteInPlace "$pluginCopyFile" \
         --replace-fail "$pluginCopyBranch" "$writablePluginCopy"
       # The Local Work executor has a separate copy path, which must also
       # repair copies left read-only by an earlier app version before refresh.
-      python3 ${../../../scripts/patch-chatgpt-executor} app/.vite/build/main-*.js
+      python3 ${../../../scripts/patch-chatgpt-executor} app/.vite/build/*.js
       asar pack app "$out/lib/chatgpt/resources/app.asar"
 
       makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \

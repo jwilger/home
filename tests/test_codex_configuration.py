@@ -33,6 +33,64 @@ class ConfigurationTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / 'scripts/reconcile-codex'), '--home', str(self.home),
                                '--defaults', str(self.defaults)], capture_output=True, text=True)
 
+    def test_lean_cli_disables_global_integrations_preserving_project_and_desktop(self):
+        defaults = json.loads(self.defaults.read_text())
+        defaults['lean_cli'] = True
+        self.defaults.write_text(json.dumps(defaults))
+        config = self.codex / 'config.toml'
+        config.write_text('[plugins."local@example"]\nenabled = true\n'
+                          '[mcp_servers.custom]\ncommand = "/local/mcp"\n'
+                          '[mcp_servers.hindsight]\ncommand = "node"\n'
+                          '[features]\nmulti_agent = true\n')
+        desktop = self.home / '.codex-chatgpt/config.toml'
+        desktop.parent.mkdir()
+        desktop.write_text('desktop sentinel')
+        project = self.home / 'src/project/.codex/config.toml'
+        project.parent.mkdir(parents=True)
+        project.write_text('project sentinel')
+        companion = self.home / '.agents/skills/hindsight-coding-agent/SKILL.md'
+        companion.parent.mkdir(parents=True)
+        companion.write_text('memory skill')
+        unrelated = self.home / '.agents/skills/group/nested/SKILL.md'
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text('unrelated skill')
+        (self.codex / 'plugins/cache/example-market/implicit-plugin/1.0').mkdir(parents=True)
+        hooks = self.codex / 'hooks.json'
+        hooks.write_text(json.dumps({'hooks': {'SessionStart': [{'hooks': [
+            {'type': 'command', 'command': "bash '" + str(self.codex / 'herdr-agent-state.sh') + "' session"},
+            {'type': 'command', 'command': 'hindsight-session-start'},
+        ]}], 'Stop': [{'hooks': [{'type': 'command', 'command': 'hindsight-stop'}]}]}}))
+        with config.open('a') as stream:
+            stream.write('\n[[skills.config]]\npath = ' + json.dumps(str(companion))
+                         + '\nenabled = true\n')
+        result = self.reconcile()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = tomllib.loads(config.read_text())
+        self.assertFalse(data['plugins']['local@example']['enabled'])
+        self.assertFalse(data['plugins']['implicit-plugin@example-market']['enabled'])
+        self.assertFalse(data['mcp_servers']['custom']['enabled'])
+        self.assertTrue(data['mcp_servers']['hindsight'].get('enabled', True))
+        self.assertFalse(data['features']['apps'])
+        self.assertFalse(data['features']['plugins'])
+        self.assertFalse(data['features']['remote_plugin'])
+        self.assertFalse(data['features']['recommended_plugins'])
+        self.assertFalse(data['features']['memories'])
+        self.assertTrue(data['features']['multi_agent'])
+        self.assertFalse(data['memories']['generate_memories'])
+        self.assertFalse(data['memories']['use_memories'])
+        self.assertFalse(data['skills']['bundled']['enabled'])
+        rules = {r['path']: r['enabled'] for r in data['skills']['config']}
+        self.assertTrue(rules[str(companion)])
+        self.assertFalse(rules[str(unrelated)])
+        self.assertEqual(desktop.read_text(), 'desktop sentinel')
+        self.assertEqual(project.read_text(), 'project sentinel')
+        commands = [h['command'] for entries in json.loads(hooks.read_text())['hooks'].values()
+                    for entry in entries for h in entry['hooks']]
+        self.assertEqual(commands, ['hindsight-session-start', 'hindsight-stop', '/managed/rtk hook codex'])
+        first = config.read_bytes()
+        self.assertEqual(self.reconcile().returncode, 0)
+        self.assertEqual(config.read_bytes(), first)
+
     def test_preserves_runtime_state_and_comments_while_reapplying_owned_settings(self):
         config = self.codex / 'config.toml'
         config.write_text('# personal note\nmodel = "old"\n[projects."/work"]\ntrust_level = "trusted"\n'

@@ -225,7 +225,10 @@
                   .retainSessions == true and
                   .autoReflect == true and
                   .gitIngest == "message" and
-                  .autoUpdate == false
+                  .autoUpdate == false and
+                  .harnesses.codex.autoInject == "pages" and
+                  .harnesses.codex.pageSearchLimit == 3 and
+                  .harnesses.codex.pageRefreshEveryTurns == 10
                 ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
                 jq -e '.serverMode == "daemon" and .apiPort == 9077' \
                   "$homeFiles/.hindsight/daemon.json" >/dev/null
@@ -291,7 +294,7 @@
                 done
                 test ! -e "$homeFiles/.codex/config.toml"
                 test ! -e "$homeFiles/.codex/hooks.json"
-                test -f "$homeFiles/.config/systemd/user/serena-runtime-install.service"
+                test ! -e "$homeFiles/.config/systemd/user/serena-runtime-install.service"
               done
               touch "$out"
             '';

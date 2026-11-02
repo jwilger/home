@@ -160,6 +160,7 @@ let
       # makes the vendor installer rewrite that read-only symlink.
       ${lib.getExe installHindsight} install codex
       ${lib.getExe patchCodexHooks}
+      ${lib.getExe config.jwilger.codex.reconcile}
     '';
   };
   launchDaemon = pkgs.writeShellApplication {
@@ -385,6 +386,12 @@ in
     gitIngest = "message";
     # Home Manager owns runtime updates; sessions must not replace live hooks.
     autoUpdate = false;
+    harnesses.codex = {
+      autoInject = "pages";
+      pageSearchLimit = 3;
+      # A local context policy; the upstream default refreshes each turn.
+      pageRefreshEveryTurns = 10;
+    };
   };
 
   home.file.".hindsight/daemon.json".text = builtins.toJSON {
@@ -413,12 +420,20 @@ in
     export HINDSIGHT_API_RERANKER_PROVIDER=rrf
     export HINDSIGHT_EMBED_API_DATABASE_URL="postgresql://${config.home.username}@/hindsight?host=${postgresSocket}&port=${postgresPort}"
     # Reset per-operation profile settings; every operation uses the same Mac.
-    ${lib.concatMapStringsSep "\n" (operation: ''
-      export HINDSIGHT_API_${operation}_LLM_PROVIDER=ollama
-      export HINDSIGHT_API_${operation}_LLM_MODEL=qwen3-coder:30b
-      export HINDSIGHT_API_${operation}_LLM_BASE_URL=http://100.98.58.77:11434
-      export HINDSIGHT_API_${operation}_LLM_API_KEY=ollama
-    '') [ "RETAIN" "REFLECT" "CONSOLIDATION" "MENTAL_MODEL_REFRESH" ]}
+    ${lib.concatMapStringsSep "\n"
+      (operation: ''
+        export HINDSIGHT_API_${operation}_LLM_PROVIDER=ollama
+        export HINDSIGHT_API_${operation}_LLM_MODEL=qwen3-coder:30b
+        export HINDSIGHT_API_${operation}_LLM_BASE_URL=http://100.98.58.77:11434
+        export HINDSIGHT_API_${operation}_LLM_API_KEY=ollama
+      '')
+      [
+        "RETAIN"
+        "REFLECT"
+        "CONSOLIDATION"
+        "MENTAL_MODEL_REFRESH"
+      ]
+    }
   '';
 
   systemd.user.services = {

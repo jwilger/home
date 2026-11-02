@@ -82,41 +82,69 @@ animation, actual monitor timing, or rendered bar geometry.
 ## Codex CLI and global agent tools
 
 Home Manager installs the pinned official Codex CLI bundle on both profiles,
-including its companion runtimes. The CLI continues to use `~/.codex`; ChatGPT
-Desktop keeps its separate login and configuration. App connectors and remote
-plugins remain enabled. Installed account plugins are shared with ChatGPT, so
-individual removals must consider non-coding uses too. Native local plugins
-remain available; Home Manager does not override individual plugin enablement.
+including its companion runtimes. The CLI uses `~/.codex`; ChatGPT Desktop uses
+its separate `~/.codex-chatgpt` configuration and login.
 
-Home Manager also manages `~/.codex/AGENTS.md`, preserving the global goal and
-sandbox-recovery rules and adding concise guidance for Serena, RTK, Context7,
-and code mode. Edit `modules/home/codex/AGENTS.md` to change these instructions.
-When migrating an existing unmanaged file, activate with a Home Manager backup
-extension so the original is retained.
+Global CLI additions are RTK, billion-context, and Hindsight. Account apps,
+remote plugin discovery, recommendations, the global plugin feature and every cached plugin ID, other
+MCP servers, bundled skills, and discovered unrelated global skills are disabled.
+Native Codex tools, subagents, and model capabilities retain their defaults.
+Native Codex memory generation and retrieval are disabled; existing memory files
+are preserved. Hindsight remains the repository memory provider.
 
-Activation runs `reconcile-codex`, which reapplies managed defaults using atomic
-replacement for each changed file, preserving trusted projects, other local
-settings, login and session state.
+Home Manager manages concise helper guidance in `~/.codex/AGENTS.md`.
+Activation runs `reconcile-codex` to reapply writable defaults and compose hooks.
+It preserves trusted projects, login/session state, and project configuration.
 Changed files and the previous `~/.local/bin/codex` entry receive timestamped
-`.home-manager-backup.*` backups. Configuration stays writable for Codex and
-Hindsight. Malformed input is rejected before configuration files are changed.
+`.home-manager-backup.*` backups. Invalid input is rejected before config writes.
+Existing Serena data and shared skill directories are retained. Serena and
+Context7 are no longer installed or started globally by this module. The obsolete
+Herdr session hook is removed; standard Hindsight hooks remain.
 
-RTK uses a native global Codex hook to filter supported shell output and coexists
-with Hindsight hooks. Use `rtk proxy <command>` for raw output with tracking, or
-`RTK_DISABLED=1 <command>` to bypass automatic rewriting. `rtk gain` reports
-estimated shell-output savings, not whole-session cost savings.
+RTK filters supported shell output through a native Codex hook. Use
+`rtk proxy <command>` for raw output with tracking, or `RTK_DISABLED=1 <command>`
+to bypass rewriting. `rtk gain` estimates shell-output savings, not total cost.
+Billion-context continues to use the persistent proxy described below.
 
-Serena uses a pinned UV runtime prepared by `serena-runtime-install.service`.
-Its global MCP selects the current working directory in Codex context and trusts
-projects and worktrees under `~/src`. Language servers still come from project
-environments; launch Codex inside the project's development shell. The dashboard
-never opens automatically. First installation requires network access; afterward
-the pinned runtime is cached.
+### Project opt-ins
 
-Context7 is a global stdio MCP. Its launcher uses 1Password account
-`QLLIV23RKJEOLAJMPOKP3NDMSU` to resolve `op://Employee/Context7/credential` only
-inside the MCP process. Unlock the team account in 1Password when prompted.
-The credential is never written to Codex configuration or the Nix store.
+Existing project configs remain unchanged; activation does not migrate global
+integrations into repositories. Add optional tools explicitly to a trusted
+project's `.codex/config.toml`. For example, replace the command below with an
+executable supplied by the project's environment:
+
+```toml
+[mcp_servers.project_tool]
+command = "/absolute/path/to/project-mcp"
+enabled = true
+
+[features]
+plugins = true
+
+[plugins."development-system@ai-plugins"]
+enabled = true
+```
+
+Plugins require both the project feature and specific plugin opt-in shown above.
+Codex 0.166.0 can inject account-synced plugin skills despite individual disabled
+entries; opting into the plugin feature may expose those account plugins too.
+For precise skill selection, prefer independent project-local skills.
+
+A project can also re-enable a disabled global MCP by its existing name and
+provide its command/environment. Ensure its runtime is available in the project
+shell. Add project-local skills as independent files in `.agents/skills`, or
+copy the desired global skill there. In Codex 0.166.0, project `skills.config`
+rules do not re-enable globally disabled skill paths; symlinks to those paths
+also remain disabled. To opt into bundled skills, set
+`skills.bundled.enabled = true` in project config. Account integration feature
+flags remain off unless the project explicitly overrides them as well.
+Untrusted project config is ignored.
+
+Hindsight's Codex-only policy automatically searches up to three knowledge pages
+and refreshes guidance every ten turns. Ten is this configuration's context
+policy, not an upstream recommendation. Session capture, repository banks,
+standard hooks, hourly page maintenance, and deliberate deeper reflection remain
+available. Claude and shared server settings retain their existing behavior.
 
 The `Update Codex CLI` Action runs nightly at 09:23 UTC or by manual dispatch.
 It validates the latest stable official release, its bundle metadata and upstream

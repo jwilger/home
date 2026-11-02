@@ -10,8 +10,8 @@ COPY = re.compile(
     rf'(?P<destination>{IDENTIFIER}),resourcesPath:(?P<resources>{IDENTIFIER})\}}\)'
     rf'\{{let (?P<entry>{IDENTIFIER})=await {IDENTIFIER}\('
     rf'\{{useWsl:!1,resourcesPath:(?P=resources)\}}\);'
-    rf'return (?P=entry)==null\?null:\()'
-    rf'(?P<copy>await (?P<fs>{IDENTIFIER})\.default\.cp\('
+    rf'return (?:(?P=entry)==null|null==(?P=entry))\?null:\()'
+    rf'(?P<copy>await (?P<fs>{IDENTIFIER}(?:\.default|\(\)))\.cp\('
     rf'(?P=entry)\.cwd,(?P=destination),\{{recursive:!0\}}\))'
 )
 
@@ -24,7 +24,7 @@ def main():
     if len(matches) != 1:
         raise SystemExit(f'Expected exactly one executor plugin copy, found {len(matches)}')
     path, match = matches[0]
-    fs = match['fs'] + '.default'
+    fs = match['fs']
     destination = match['destination']
     # Node fs.cp preserves immutable package modes. Repair an old copy before
     # overwrite, then repair the new copy before the app rewrites .mcp.json.
