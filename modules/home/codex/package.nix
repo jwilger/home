@@ -22,10 +22,10 @@ let
 in
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "codex";
-  version = "0.166.0";
+  version = "0.167.0";
   src = pkgs.fetchurl {
     url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-package-x86_64-unknown-linux-musl.tar.gz";
-    hash = "sha256-HUSyi8SsmTfX01MiZLqmilB842SVag1Ou4VvMxze4lQ=";
+    hash = "sha256-O7916D3mtYrtKPLPbjOtQj7DH9RwChRXuUvlV+pafG4=";
   };
   nativeBuildInputs = [
     pkgs.makeWrapper
