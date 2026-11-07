@@ -121,6 +121,17 @@
       };
 
       checks.${system} = {
+        obsbot-tracking-resume =
+          pkgs.runCommand "check-obsbot-tracking-resume"
+            {
+              nativeBuildInputs = [ pkgs.python3 ];
+              OBSBOT_TRACKING_SOURCE = ./modules/home/desktop/obsbot-tracking.py;
+            }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              python3 ${./tests/test_obsbot_tracking.py} -v
+              touch "$out"
+            '';
         tmux-clipboard =
           let
             homeConfig = self.homeConfigurations."jwilger@gregor".config;

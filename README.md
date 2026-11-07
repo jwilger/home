@@ -22,6 +22,46 @@ copies into writable user configuration. After intentional UI changes, run
 repository and leaves the Git diff uncommitted for inspection. Generated state
 and plugin data are never captured.
 
+## OBSBOT camera controls
+
+Both workstation profiles install [Tiny4Linux](https://github.com/OpenFoxes/Tiny4Linux)
+2.2.1 with dashboard and widget launchers, its `t4l` command, and
+[Camset](https://github.com/azeam/camset), the upstream recommendation for standard
+camera controls. `v4l2-ctl` is also available for inspecting and adjusting controls.
+
+Open Tiny4Linux from the application launcher, or use:
+
+```sh
+t4l wake
+t4l tracking normal
+t4l info
+```
+
+Keep a camera preview open and a person in view when checking AI tracking.
+`t4l tracking close-up` requests close-up framing; `t4l tracking static` disables
+tracking. Check the reported AI mode: a successful command alone, or a status of
+`Static`, does not confirm that the camera has acquired a subject.
+
+Normal tracking is restored automatically when a video application opens the
+camera after an idle period. The helper preserves an already active framing mode
+and lets you disable tracking during the current session. It does not open a
+video stream or wake a sleeping camera. To stop automatic restoration, run
+`systemctl --user stop obsbot-tracking-resume.service`.
+
+For manual zoom, open **Camset**, select the OBSBOT capture device, and adjust
+**Zoom, Absolute**. The connected Tiny 2 Lite exposes a 0–100 zoom range. To inspect
+devices from the terminal, run `v4l2-ctl --list-devices`, then use the capture node
+shown for the camera (replace `/dev/videoN` below):
+
+```sh
+v4l2-ctl --device /dev/videoN --get-ctrl zoom_absolute
+v4l2-ctl --device /dev/videoN --set-ctrl zoom_absolute=25
+```
+
+Camera controls apply to other video applications too. Some gesture settings and
+the creation of preset positions may require one-time setup in OBSBOT Center on
+Windows or macOS, as described in the Tiny4Linux README.
+
 ## Hyprland workspaces and layouts
 
 On the T14, **Super+1–9** selects a logical workspace in the bank belonging to
