@@ -22,6 +22,20 @@ copies into writable user configuration. After intentional UI changes, run
 repository and leaves the Git diff uncommitted for inspection. Generated state
 and plugin data are never captured.
 
+## OBS podcast recording (T14)
+
+Open **OBS Podcast Studio** or run `obs-podcast` for editable 1080p30 solo,
+screen, interview and panel presets using the OBSBOT camera and Blue USB mic.
+Run `obs-podcast-setup links` for private VDO.Ninja guest/cohost invitations;
+guests need only a browser. Recording includes a full audio mix plus isolated
+host, guest and selected computer-audio tracks. Select your screen once through
+the Wayland portal and route clip applications to **Podcast-Program** in
+`pavucontrol`; leave the director browser on your real headphones.
+
+See [the podcast runbook](docs/obs-podcast.md) for first-use setup, guest-local
+recording for best quality, avoiding doubled audio, Zoom/Meet fallback, and a
+preflight checklist. No recording, streaming or guest invitation starts at login.
+
 ## OBSBOT camera controls
 
 Both workstation profiles install [Tiny4Linux](https://github.com/OpenFoxes/Tiny4Linux)

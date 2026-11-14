@@ -121,6 +121,16 @@
       };
 
       checks.${system} = {
+        obs-podcast =
+          pkgs.runCommand "check-obs-podcast"
+            {
+              OBS_PODCAST_SOURCE = ./modules/home/desktop/obs-podcast.py;
+            }
+            ''
+              export PYTHONDONTWRITEBYTECODE=1
+              ${pkgs.python3}/bin/python3 ${./tests/test_obs_podcast.py} -v
+              touch "$out"
+            '';
         obsbot-tracking-resume =
           pkgs.runCommand "check-obsbot-tracking-resume"
             {
