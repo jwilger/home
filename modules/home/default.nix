@@ -36,6 +36,7 @@ in
     ./aws.nix
     ./bat.nix
     ./btop.nix
+    ./claude-code
     ./codex
     ./codex-session-retention.nix
     ./development-storage.nix

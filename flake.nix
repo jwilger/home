@@ -227,6 +227,68 @@
             ${python}/bin/python3 -m unittest discover -s ${./.}/tests -p 'test_codex_*.py'
             touch "$out"
           '';
+        claude-code-statusline =
+          let
+            claudeCode = self.homeConfigurations."jwilger@gregor".config.jwilger.claudeCode;
+            statusLine = pkgs.lib.getExe claudeCode.statusLine;
+          in
+          pkgs.runCommand "check-claude-code-statusline"
+            {
+              nativeBuildInputs = [
+                pkgs.coreutils
+                pkgs.git
+                pkgs.jq
+              ];
+            }
+            ''
+              export HOME="$TMPDIR/home" TZ=UTC
+              mkdir -p "$HOME/repo"
+              git -C "$HOME/repo" init -q -b feature/statusline
+              plain() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+              # Every field present: two rows, threshold colours, local resets.
+              full="$(${statusLine} <<JSON | plain
+              {"workspace":{"current_dir":"$HOME/repo"},"model":{"display_name":"Opus"},
+               "context_window":{"used_percentage":42.6},"cost":{"total_cost_usd":1.23456},
+               "rate_limits":{"five_hour":{"used_percentage":63.2,"resets_at":1767225600},
+                              "seven_day":{"used_percentage":88,"resets_at":1767225600},
+                              "spend_limit":{"used_percentage":62.8,"resets_at":1767225600,
+                                             "used_usd":314.12,"limit_usd":500}}}
+              JSON
+              )"
+              test "$(sed -n 1p <<<"$full")" = "$(printf '\356\227\276 ~/repo \357\214\223 \342\236\234 \356\234\245 feature/statusline')"
+              test "$(sed -n 2p <<<"$full")" = 'Opus ctx 43% $1.23 5h 63% (00:00) 7d 88% (Thu 00:00) $314/$500 63% (Jan 01)'
+              colours="$(${statusLine} <<<'{"context_window":{"used_percentage":49.4},
+                "rate_limits":{"five_hour":{"used_percentage":50},"seven_day":{"used_percentage":80}}}')"
+              grep -Fq "$(printf '\033[38;2;166;227;161m49%%')" <<<"$colours"
+              grep -Fq "$(printf '\033[38;2;249;226;175m50%%')" <<<"$colours"
+              grep -Fq "$(printf '\033[38;2;243;139;168m80%%')" <<<"$colours"
+
+              # Absent or null fields drop their segment; a real 0% still shows.
+              test "$(${statusLine} <<<'{"workspace":{"current_dir":"/tmp"},"rate_limits":null}' | plain)" \
+                = "$(printf '\356\227\276 /tmp \357\214\223 \342\236\234')"
+              test "$(${statusLine} <<<'{"context_window":{"used_percentage":0}}' | plain | sed -n 2p)" = 'ctx 0%'
+              ${statusLine} <<<'not json' > /dev/null
+
+              # Activation merges statusLine and keeps every other key and the mode.
+              settings="$HOME/.claude/settings.json"
+              mkdir -p "$HOME/.claude"
+              printf '{"model":"opus","hooks":{"Stop":[]},"statusLine":{"type":"command","command":"old"}}' > "$settings"
+              chmod 600 "$settings"
+              ${pkgs.lib.getExe claudeCode.applySettings}
+              test "$(jq -c 'del(.statusLine)' "$settings")" = '{"model":"opus","hooks":{"Stop":[]}}'
+              test "$(jq -r .statusLine.type "$settings")" = command
+              test "$(jq -r .statusLine.command "$settings")" = ${pkgs.lib.escapeShellArg statusLine}
+              test "$(stat -c %a "$settings")" = 600
+              touch -d @0 "$settings"
+              ${pkgs.lib.getExe claudeCode.applySettings}
+              test "$(stat -c %Y "$settings")" = 0
+              rm "$settings"
+              ${pkgs.lib.getExe claudeCode.applySettings}
+              test "$(jq -r .statusLine.command "$settings")" = ${pkgs.lib.escapeShellArg statusLine}
+              test "$(stat -c %a "$settings")" = 600
+              touch "$out"
+            '';
         gregor = self.homeConfigurations."jwilger@gregor".activationPackage;
         jwilger-t14 = self.homeConfigurations."jwilger@jwilger-t14".activationPackage;
         hindsight-integration =
