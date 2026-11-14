@@ -14,7 +14,7 @@ let
   ]);
   defaults = pkgs.writeText "codex-home-manager-defaults.json" (
     builtins.toJSON {
-      lean_cli = true;
+      restore_shared_defaults = true;
       settings = {
         model = "gpt-6.1-sol";
         model_reasoning_effort = "low";
@@ -38,18 +38,7 @@ let
         tui.status_line_use_colors = true;
         features = {
           hooks = true;
-          apps = false;
-          plugins = false;
-          remote_plugin = false;
-          recommended_plugins = false;
-          memories = false;
         };
-        apps._default.enabled = false;
-        memories = {
-          generate_memories = false;
-          use_memories = false;
-        };
-        skills.bundled.enabled = false;
         mcp_servers = {
           bili = {
             command = "${bili}/bin/bili-mcp";

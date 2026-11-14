@@ -122,15 +122,23 @@ animation, actual monitor timing, or rendered bar geometry.
 ## Codex CLI and global agent tools
 
 Home Manager installs the pinned official Codex CLI bundle on both profiles,
-including its companion runtimes. The CLI uses `~/.codex`; ChatGPT Desktop uses
-its separate `~/.codex-chatgpt` configuration and login.
+including its companion runtimes. The CLI and ChatGPT Desktop share the default
+`~/.codex` configuration and login. The desktop launcher inherits `CODEX_HOME`
+when explicitly supplied by a project environment. The former `~/.codex-chatgpt`
+directory is left intact as an archive; its settings and credentials are not
+merged over the default directory.
 
-Global CLI additions are RTK, billion-context, and Hindsight. Account apps,
-remote plugin discovery, recommendations, the global plugin feature and every cached plugin ID, other
-MCP servers, bundled skills, and discovered unrelated global skills are disabled.
-Native Codex tools, subagents, and model capabilities retain their defaults.
-Native Codex memory generation and retrieval are disabled; existing memory files
-are preserved. Hindsight remains the repository memory provider.
+Claude Code uses its default `~/.claude` directory; neither Claude launcher sets
+`CLAUDE_CONFIG_DIR`. Put project settings in `.claude/settings.json` (or
+`.claude/settings.local.json` for private settings), and Codex project settings
+in `.codex/config.toml`. Desktop app UI data remains in the apps' native
+`~/.config/Claude` and `~/.config/ChatGPT` directories.
+
+Shared additions are RTK, billion-context, and Hindsight. Apps, plugins, MCP
+servers, skills, and native memory use their upstream defaults or user settings.
+On the first activation of this configuration, a backed-up migration removes
+the disabling overrides written by the former lean CLI baseline. Later global
+choices are preserved. Put project-specific restrictions in project config.
 
 Home Manager manages concise helper guidance in `~/.codex/AGENTS.md`.
 Activation runs `reconcile-codex` to reapply writable defaults and compose hooks.
@@ -146,7 +154,7 @@ RTK filters supported shell output through a native Codex hook. Use
 to bypass rewriting. `rtk gain` estimates shell-output savings, not total cost.
 Billion-context continues to use the persistent proxy described below.
 
-### Project opt-ins
+### Project configuration
 
 Existing project configs remain unchanged; activation does not migrate global
 integrations into repositories. Add optional tools explicitly to a trusted
@@ -165,19 +173,9 @@ plugins = true
 enabled = true
 ```
 
-Plugins require both the project feature and specific plugin opt-in shown above.
-Codex 0.166.0 can inject account-synced plugin skills despite individual disabled
-entries; opting into the plugin feature may expose those account plugins too.
-For precise skill selection, prefer independent project-local skills.
-
-A project can also re-enable a disabled global MCP by its existing name and
-provide its command/environment. Ensure its runtime is available in the project
-shell. Add project-local skills as independent files in `.agents/skills`, or
-copy the desired global skill there. In Codex 0.166.0, project `skills.config`
-rules do not re-enable globally disabled skill paths; symlinks to those paths
-also remain disabled. To opt into bundled skills, set
-`skills.bundled.enabled = true` in project config. Account integration feature
-flags remain off unless the project explicitly overrides them as well.
+Use the same project configuration to disable unwanted features, plugins, or
+MCP servers with `enabled = false` where supported. Ensure tool runtimes are
+available in the project shell. Add project-local skills in `.agents/skills`.
 Untrusted project config is ignored.
 
 Hindsight's Codex-only policy automatically searches up to three knowledge pages
@@ -210,9 +208,9 @@ compression, decompression, and context search. Continue using plain `codex`
 and `codex agents` from any shell; no `bili codex` launcher is needed.
 
 The managed `~/.codex/.env` routes Codex traffic through the persistent proxy
-and trusts its combined public-root/local-CA bundle. Other applications keep
-their own proxy settings, and the ChatGPT desktop's separate Codex home is
-unchanged. The proxy's private CA and session history remain in the user's
+and trusts its combined public-root/local-CA bundle. ChatGPT Desktop shares
+this Codex environment; other applications keep their own proxy settings.
+The proxy's private CA and session history remain in the user's
 data directory, outside the Nix store. The service uses a store configuration
 and disables self-updates; change the package pin to update it.
 

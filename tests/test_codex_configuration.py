@@ -33,15 +33,24 @@ class ConfigurationTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / 'scripts/reconcile-codex'), '--home', str(self.home),
                                '--defaults', str(self.defaults)], capture_output=True, text=True)
 
-    def test_lean_cli_disables_global_integrations_preserving_project_and_desktop(self):
+    def test_shared_defaults_retire_lean_overrides_once_preserving_project_and_archive(self):
         defaults = json.loads(self.defaults.read_text())
-        defaults['lean_cli'] = True
+        defaults['restore_shared_defaults'] = True
+        del defaults['settings']['features']['remote_plugin']
+        del defaults['settings']['apps']
         self.defaults.write_text(json.dumps(defaults))
         config = self.codex / 'config.toml'
-        config.write_text('[plugins."local@example"]\nenabled = true\n'
-                          '[mcp_servers.custom]\ncommand = "/local/mcp"\n'
+        config.write_text('[plugins."local@example"]\nenabled = false\n'
+                          '[mcp_servers.custom]\ncommand = "/local/mcp"\nenabled = false\n'
                           '[mcp_servers.hindsight]\ncommand = "node"\n'
-                          '[features]\nmulti_agent = true\n')
+                          '[features]\nmulti_agent = true\napps = false\nplugins = false\n'
+                          'remote_plugin = false\nrecommended_plugins = false\nmemories = false\n'
+                          '[memories]\ngenerate_memories = false\nuse_memories = false\n'
+                          '[apps._default]\nenabled = false\n'
+                          '[apps.example]\nenabled = false\n'
+                          '[skills.bundled]\nenabled = false\n')
+        auth = self.codex / 'auth.json'
+        auth.write_text('existing credentials')
         desktop = self.home / '.codex-chatgpt/config.toml'
         desktop.parent.mkdir()
         desktop.write_text('desktop sentinel')
@@ -54,6 +63,9 @@ class ConfigurationTest(unittest.TestCase):
         unrelated = self.home / '.agents/skills/group/nested/SKILL.md'
         unrelated.parent.mkdir(parents=True)
         unrelated.write_text('unrelated skill')
+        with config.open('a') as stream:
+            stream.write('\n[[skills.config]]\npath = ' + json.dumps(str(unrelated))
+                         + '\nenabled = false\n')
         (self.codex / 'plugins/cache/example-market/implicit-plugin/1.0').mkdir(parents=True)
         hooks = self.codex / 'hooks.json'
         hooks.write_text(json.dumps({'hooks': {'SessionStart': [{'hooks': [
@@ -66,30 +78,40 @@ class ConfigurationTest(unittest.TestCase):
         result = self.reconcile()
         self.assertEqual(result.returncode, 0, result.stderr)
         data = tomllib.loads(config.read_text())
-        self.assertFalse(data['plugins']['local@example']['enabled'])
-        self.assertFalse(data['plugins']['implicit-plugin@example-market']['enabled'])
-        self.assertFalse(data['mcp_servers']['custom']['enabled'])
+        self.assertNotIn('enabled', data['plugins']['local@example'])
+        self.assertNotIn('implicit-plugin@example-market', data['plugins'])
+        self.assertNotIn('enabled', data['mcp_servers']['custom'])
+        self.assertNotIn('enabled', data['apps']['_default'])
+        self.assertNotIn('enabled', data['apps']['example'])
         self.assertTrue(data['mcp_servers']['hindsight'].get('enabled', True))
-        self.assertFalse(data['features']['apps'])
-        self.assertFalse(data['features']['plugins'])
-        self.assertFalse(data['features']['remote_plugin'])
-        self.assertFalse(data['features']['recommended_plugins'])
-        self.assertFalse(data['features']['memories'])
+        self.assertTrue(data['features']['apps'])  # An explicitly managed true default survives.
+        for key in ['plugins', 'remote_plugin', 'recommended_plugins', 'memories']:
+            self.assertNotIn(key, data['features'])
         self.assertTrue(data['features']['multi_agent'])
-        self.assertFalse(data['memories']['generate_memories'])
-        self.assertFalse(data['memories']['use_memories'])
-        self.assertFalse(data['skills']['bundled']['enabled'])
+        self.assertNotIn('generate_memories', data['memories'])
+        self.assertNotIn('use_memories', data['memories'])
+        self.assertNotIn('enabled', data['skills']['bundled'])
         rules = {r['path']: r['enabled'] for r in data['skills']['config']}
         self.assertTrue(rules[str(companion)])
-        self.assertFalse(rules[str(unrelated)])
+        self.assertNotIn(str(unrelated), rules)
         self.assertEqual(desktop.read_text(), 'desktop sentinel')
         self.assertEqual(project.read_text(), 'project sentinel')
+        self.assertEqual(auth.read_text(), 'existing credentials')
+        self.assertTrue((self.codex / '.home-manager-shared-defaults-v1').exists())
         commands = [h['command'] for entries in json.loads(hooks.read_text())['hooks'].values()
                     for entry in entries for h in entry['hooks']]
         self.assertEqual(commands, ['hindsight-session-start', 'hindsight-stop', '/managed/rtk hook codex'])
         first = config.read_bytes()
         self.assertEqual(self.reconcile().returncode, 0)
         self.assertEqual(config.read_bytes(), first)
+        # Subsequent global choices are no longer forced by Home Manager.
+        config.write_text(config.read_text().replace('multi_agent = true', 'multi_agent = false\nplugins = false')
+                          + '\n[plugins."later@example"]\nenabled = false\n')
+        self.assertEqual(self.reconcile().returncode, 0)
+        later = tomllib.loads(config.read_text())
+        self.assertFalse(later['plugins']['later@example']['enabled'])
+        self.assertFalse(later['features']['multi_agent'])
+        self.assertFalse(later['features']['plugins'])
 
     def test_preserves_runtime_state_and_comments_while_reapplying_owned_settings(self):
         config = self.codex / 'config.toml'
@@ -153,6 +175,9 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(commands, ['user-hook', '/managed/rtk hook codex'])
 
     def test_malformed_input_does_not_partially_update_config(self):
+        defaults = json.loads(self.defaults.read_text())
+        defaults['restore_shared_defaults'] = True
+        self.defaults.write_text(json.dumps(defaults))
         config = self.codex / 'config.toml'
         config.write_text('model = "old"\n')
         hooks = self.codex / 'hooks.json'
@@ -161,6 +186,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(config.read_text(), 'model = "old"\n')
         self.assertEqual(hooks.read_text(), '{broken')
         self.assertFalse(list(self.home.rglob('*.home-manager-backup.*')))
+        self.assertFalse((self.codex / '.home-manager-shared-defaults-v1').exists())
 
     def test_migrates_legacy_executable_and_preserves_serena_projects(self):
         binary = self.home / '.local/bin/codex'

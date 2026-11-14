@@ -80,10 +80,10 @@ works merely because screen sharing works.
   A future adapter must join that session, not create a competing compositor or
   session target.
 - grim is already supplied through Noctalia and wtype through Voxtype.
-- `modules/home/desktop/chatgpt.nix` packages desktop **26.930.31730** and sets
-  `CODEX_HOME=$HOME/.codex-chatgpt`. Local MCP configuration for that desktop
-  host therefore cannot simply be assumed to come from `~/.codex/config.toml`.
-  Existing desktop and CLI identities/configurations must remain separate.
+- `modules/home/desktop/chatgpt.nix` uses the default Codex directory, shared
+  with the CLI (`~/.codex`, unless `CODEX_HOME` is supplied by the environment).
+  Local MCP configuration comes from the shared config and project overrides.
+  Electron UI data remains in `~/.config/ChatGPT`.
 
 ## Use the read-only probe after approval
 

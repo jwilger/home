@@ -27,6 +27,14 @@ class ExecutorPatchTest(unittest.TestCase):
         ).replace('const j={default:fs};', '')
         self.exercise_copy(fixture)
 
+    def test_copy_and_refresh_with_anonymous_current_helper(self):
+        fixture = FIXTURE.replace('n==null', 'null==n').replace(
+            'j.default.', 'k().'
+        ).replace('const j={default:fs};', '').replace(
+            'async function ese(', 'async function('
+        )
+        self.exercise_copy(fixture)
+
     def exercise_copy(self, fixture):
         with tempfile.TemporaryDirectory() as tmp:
             bundle = pathlib.Path(tmp)/'main-test.js'
@@ -88,7 +96,10 @@ main().catch(e=>{console.error(e);process.exitCode=1});
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_rejects_missing_or_ambiguous_copy_site_without_writing(self):
-        for source in ['unrelated', FIXTURE+FIXTURE,
+        anonymous = FIXTURE.replace('async function ese(', 'async function(')
+        for source in ['unrelated', FIXTURE+FIXTURE, anonymous+anonymous,
+                       FIXTURE+anonymous,
+                       anonymous.replace('executorPluginRoot', 'unrelatedRoot'),
                        FIXTURE.replace('executorPluginRoot', 'unrelatedRoot')]:
             with self.subTest(source=source), tempfile.TemporaryDirectory() as tmp:
                 bundle = pathlib.Path(tmp)/'main-test.js'

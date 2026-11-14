@@ -6,7 +6,7 @@ import sys
 
 IDENTIFIER = r'[A-Za-z_$][A-Za-z0-9_$]*'
 COPY = re.compile(
-    rf'(?P<prefix>async function {IDENTIFIER}\(\{{executorPluginRoot:'
+    rf'(?P<prefix>async function(?: {IDENTIFIER})?\(\{{executorPluginRoot:'
     rf'(?P<destination>{IDENTIFIER}),resourcesPath:(?P<resources>{IDENTIFIER})\}}\)'
     rf'\{{let (?P<entry>{IDENTIFIER})=await {IDENTIFIER}\('
     rf'\{{useWsl:!1,resourcesPath:(?P=resources)\}}\);'
