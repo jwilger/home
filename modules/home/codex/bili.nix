@@ -38,7 +38,8 @@ in
     HTTPS_PROXY=${origin}
     HTTP_PROXY=${origin}
     # Bili rejects realtime voice WebSocket upgrades; model traffic uses chatgpt.com.
-    NO_PROXY=localhost,127.0.0.1,::1,api.openai.com
+    # Git fetches GitHub-hosted plugin marketplaces directly.
+    NO_PROXY=localhost,127.0.0.1,::1,api.openai.com,github.com
     SSL_CERT_FILE=${config.xdg.dataHome}/billion-context/ca/combined-ca.pem
     BILI_MCP_PROXY=${origin}
   '';
