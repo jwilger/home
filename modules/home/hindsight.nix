@@ -22,6 +22,15 @@ let
         --replace-fail 'function stageRuntime(c) {' 'function stageRuntime(c) { return c;' \
         --replace-fail 'cpSync2(src, dst, { recursive: true });' \
           'mkdirSync7(dst, { recursive: true }); execFileSync8("chmod", ["-R", "u+w", dst]); execFileSync8("cp", ["-r", "--no-preserve=mode", src + "/.", dst]);'
+
+      # The shared Ollama runner can queue query embeddings behind generation.
+      cp ${./hindsight-knowledge-search.mjs} dist/hindsight-knowledge-search.mjs
+      substituteInPlace dist/mcp-server.js \
+        --replace-fail 'const hits = await client.searchKnowledgePages(args.query);' \
+          'const { hits, notice } = await searchKnowledgePagesWithFallback(client, args.query);' \
+        --replace-fail 'pages: hits.map((h) => ({' \
+          '...(notice ? { notice } : {}), pages: hits.map((h) => ({'
+      sed -i '2i import { searchKnowledgePagesWithFallback } from "./hindsight-knowledge-search.mjs";' dist/mcp-server.js
     '';
     installPhase = ''
       mkdir -p "$out"
