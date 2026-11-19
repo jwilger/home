@@ -15,7 +15,7 @@
       }
       // {
         unix_domains = [
-          { name = "local"; }
+          { name = "home-mux"; }
         ];
         color_scheme = "Catppuccin Mocha";
         font = lib.generators.mkLuaInline ''
