@@ -306,12 +306,16 @@
                   .apiUrl == "http://127.0.0.1:9077" and
                   .bankIdTemplate == "coding-agent::{gitProject}" and
                   .retainSessions == true and
-                  .autoReflect == true and
+                  .autoInject == "reflect" and
+                  (has("autoReflect") | not) and
                   .gitIngest == "message" and
                   .autoUpdate == false and
                   .harnesses.codex.autoInject == "pages" and
                   .harnesses.codex.pageSearchLimit == 3 and
-                  .harnesses.codex.pageRefreshEveryTurns == 10
+                  .harnesses.codex.pageRefreshEveryTurns == 10 and
+                  .harnesses.pi.autoInject == "pages" and
+                  .harnesses.pi.pageSearchLimit == 3 and
+                  .harnesses.pi.pageRefreshEveryTurns == 10
                 ' "$homeFiles/.hindsight/coding-agent.json" >/dev/null
                 jq -e '.serverMode == "daemon" and .apiPort == 9077' \
                   "$homeFiles/.hindsight/daemon.json" >/dev/null

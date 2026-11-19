@@ -391,7 +391,7 @@ in
     resolveWorktrees = true;
     optInOnly = false;
     retainSessions = true;
-    autoReflect = true;
+    autoInject = "reflect";
     gitIngest = "message";
     # Home Manager owns runtime updates; sessions must not replace live hooks.
     autoUpdate = false;
@@ -399,6 +399,12 @@ in
       autoInject = "pages";
       pageSearchLimit = 3;
       # A local context policy; the upstream default refreshes each turn.
+      pageRefreshEveryTurns = 10;
+    };
+    # Session-start reflect regularly exceeds its 20s budget in pi; inject pages instead.
+    harnesses.pi = {
+      autoInject = "pages";
+      pageSearchLimit = 3;
       pageRefreshEveryTurns = 10;
     };
   };
