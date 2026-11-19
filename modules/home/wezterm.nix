@@ -14,6 +14,9 @@
         '';
       }
       // {
+        unix_domains = [
+          { name = "local"; }
+        ];
         color_scheme = "Catppuccin Mocha";
         font = lib.generators.mkLuaInline ''
           wezterm.font_with_fallback({
