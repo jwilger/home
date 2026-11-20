@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted — John authorized the all-local migration.
+Accepted — John authorized the all-local migration. The M4 still serves LLM
+operations, but recurring hybrid-search timeouts triggered the queue-latency
+revisit below. Embeddings now run on a dedicated CPU runner on the Linux host,
+with the same pinned model and no re-embedding. See the
+[operational runbook](../hindsight-local-models.md) for current routing.
 
 ## Context
 

@@ -276,21 +276,20 @@ Home Manager switch, run `systemctl --user start voxtype.service`.
 ## Hindsight memory
 
 Home Manager configures a local Hindsight daemon and installs its Codex hooks,
-MCP server, and agent skill. All inference runs on the MacBook Pro M4's Ollama
-server at `http://100.98.58.77:11434` over Tailscale:
+MCP server, and agent skill.
 
-- LLM operations: `qwen3-coder:30b` using the Ollama provider.
-- Embeddings: `qwen3-embedding:0.6b`, 1,024 dimensions, through Ollama's
-  OpenAI-compatible `/v1` API. The provider name `openai` here describes the
-  protocol; requests do not go to OpenAI.
-- Retrieval: RRF without a paid reranker.
+- LLM operations: `qwen3-coder:30b` on the MacBook Pro M4's Ollama server at
+  `http://100.98.58.77:11434` over Tailscale.
+- Embeddings: `qwen3-embedding:0.6b`, 1,024 dimensions, on a dedicated local CPU
+  runner (`hindsight-embeddings.service`, `http://127.0.0.1:11435/v1`). The
+  provider name `openai` describes the API protocol; requests do not go to OpenAI.
+- Retrieval: hybrid knowledge-page search and RRF without a paid reranker.
 
-There is no hosted fallback and no OpenAI credential is needed. The Mac must stay
-awake, connected to Tailscale, and running Ollama. If it is unavailable, memory
-operations fail rather than spend money. The legacy `~/.hindsight/openai.env`
-filename is retained, but now contains only local inference/database settings.
-See [the migration runbook](docs/hindsight-local-models.md) before switching an
-existing database to a different embedding model.
+There is no hosted fallback and no OpenAI credential is needed. Knowledge-page
+search no longer depends on the Mac; LLM operations still do. The legacy
+`~/.hindsight/openai.env` filename contains only local inference/database
+settings. See [the runbook](docs/hindsight-local-models.md) for rollout and the
+migration procedure before switching an existing database to a different model.
 Hindsight uses a Home Manager-managed PostgreSQL 18 instance with pgvector in
 `~/.local/share/hindsight/postgres`, accessible only through a private Unix
 socket. It does not use Hindsight's bundled PostgreSQL or the system NixOS

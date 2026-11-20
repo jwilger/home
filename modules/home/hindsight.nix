@@ -22,15 +22,6 @@ let
         --replace-fail 'function stageRuntime(c) {' 'function stageRuntime(c) { return c;' \
         --replace-fail 'cpSync2(src, dst, { recursive: true });' \
           'mkdirSync7(dst, { recursive: true }); execFileSync8("chmod", ["-R", "u+w", dst]); execFileSync8("cp", ["-r", "--no-preserve=mode", src + "/.", dst]);'
-
-      # The shared Ollama runner can queue query embeddings behind generation.
-      cp ${./hindsight-knowledge-search.mjs} dist/hindsight-knowledge-search.mjs
-      substituteInPlace dist/mcp-server.js \
-        --replace-fail 'const hits = await client.searchKnowledgePages(args.query);' \
-          'const { hits, notice } = await searchKnowledgePagesWithFallback(client, args.query);' \
-        --replace-fail 'pages: hits.map((h) => ({' \
-          '...(notice ? { notice } : {}), pages: hits.map((h) => ({'
-      sed -i '2i import { searchKnowledgePagesWithFallback } from "./hindsight-knowledge-search.mjs";' dist/mcp-server.js
     '';
     installPhase = ''
       mkdir -p "$out"
@@ -53,6 +44,64 @@ let
   };
   credentialEnv = "${hindsightDirectory}/openai.env";
   daemonConfig = "${hindsightDirectory}/daemon.json";
+  embeddingHost = "127.0.0.1:11435";
+  embeddingModel = "qwen3-embedding:0.6b";
+  embeddingDimensions = 1024;
+  embeddingRegistry = "https://registry.ollama.ai/v2/library/qwen3-embedding";
+  # Match the Mac's exact manifest and weights: existing vectors depend on them.
+  embeddingManifest = pkgs.fetchurl {
+    url = "${embeddingRegistry}/manifests/0.6b";
+    name = "qwen3-embedding-0.6b-manifest.json";
+    sha256 = "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d";
+  };
+  embeddingWeights = "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439";
+  embeddingConfig = "9202febed9e2dadac14bca089be90864571336fa9f4375b690a26ed548957fde";
+  fetchEmbeddingBlob =
+    name: hash:
+    pkgs.fetchurl {
+      inherit name;
+      url = "${embeddingRegistry}/blobs/sha256:${hash}";
+      sha256 = hash;
+    };
+  embeddingModels = pkgs.runCommand "hindsight-embedding-models" { } ''
+    manifests="$out/manifests/registry.ollama.ai/library/qwen3-embedding"
+    mkdir -p "$manifests" "$out/blobs"
+    # Ollama discovers model tags from regular manifest files, not symlinks.
+    cp ${embeddingManifest} "$manifests/0.6b"
+    ln -s ${fetchEmbeddingBlob "qwen3-embedding-0.6b-q8_0.gguf" embeddingWeights} "$out/blobs/sha256-${embeddingWeights}"
+    cp ${fetchEmbeddingBlob "qwen3-embedding-0.6b-config.json" embeddingConfig} "$out/blobs/sha256-${embeddingConfig}"
+  '';
+  prepareEmbeddings = pkgs.writeShellApplication {
+    name = "prepare-hindsight-embeddings";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      # Ollama must be able to create its metadata and manifests-v2 directories.
+      manifests=manifests/registry.ollama.ai/library/qwen3-embedding
+      mkdir -p "$OLLAMA_MODELS/$manifests" "$OLLAMA_MODELS/blobs"
+      install -m644 "$HINDSIGHT_EMBEDDING_MODEL_SOURCE/$manifests/0.6b" "$OLLAMA_MODELS/$manifests/0.6b"
+      for blob in "$HINDSIGHT_EMBEDDING_MODEL_SOURCE"/blobs/*; do
+        ln -sfn "$(readlink -f "$blob")" "$OLLAMA_MODELS/blobs/''${blob##*/}"
+      done
+    '';
+  };
+  warmEmbeddings = pkgs.writeShellApplication {
+    name = "warm-hindsight-embeddings";
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.jq
+    ];
+    text = ''
+      curl --noproxy '*' --fail --silent --show-error \
+        --retry 10 --retry-connrefused --retry-max-time 45 --max-time 30 \
+        http://${embeddingHost}/v1/embeddings -H 'Content-Type: application/json' \
+        -d '${builtins.toJSON {
+          model = embeddingModel;
+          input = "Hindsight embedding readiness probe";
+          dimensions = embeddingDimensions;
+        }}' \
+        | jq -e '.data[0].embedding | length == ${toString embeddingDimensions}' >/dev/null
+    '';
+  };
   postgres = pkgs.postgresql_18.withPackages (extensions: [ extensions.pgvector ]);
   postgresDirectory = "${homeDirectory}/.local/share/hindsight/postgres";
   postgresSocket = "${postgresDirectory}/socket";
@@ -426,10 +475,10 @@ in
     export HINDSIGHT_API_LLM_TIMEOUT=600
     export HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS=8192
     export HINDSIGHT_API_EMBEDDINGS_PROVIDER=openai
-    export HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL=http://100.98.58.77:11434/v1
-    export HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL=qwen3-embedding:0.6b
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL=http://${embeddingHost}/v1
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL=${embeddingModel}
     export HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY=ollama
-    export HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS=1024
+    export HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS=${toString embeddingDimensions}
     export HINDSIGHT_API_EMBEDDINGS_OPENAI_BATCH_SIZE=8
     export HINDSIGHT_API_EMBEDDINGS_MAX_CONCURRENT_REQUESTS=1
     export HINDSIGHT_API_RERANKER_PROVIDER=rrf
@@ -452,6 +501,33 @@ in
   '';
 
   systemd.user.services = {
+    # A dedicated CPU runner keeps embeddings off the M4's generation queue.
+    hindsight-embeddings = {
+      Unit.Description = "Dedicated loopback Ollama embeddings for Hindsight";
+      Service = {
+        Type = "exec";
+        ExecStartPre = lib.getExe prepareEmbeddings;
+        ExecStart = "${lib.getExe pkgs.ollama-cpu} serve";
+        ExecStartPost = lib.getExe warmEmbeddings;
+        Environment = [
+          "HOME=%S/hindsight-embeddings"
+          "OLLAMA_HOST=${embeddingHost}"
+          "OLLAMA_MODELS=%S/hindsight-embeddings/models"
+          "HINDSIGHT_EMBEDDING_MODEL_SOURCE=${embeddingModels}"
+          "OLLAMA_NO_CLOUD=1"
+          "OLLAMA_NOPRUNE=1"
+          "OLLAMA_KEEP_ALIVE=-1"
+          "OLLAMA_MAX_LOADED_MODELS=1"
+          "OLLAMA_CONTEXT_LENGTH=32768"
+        ];
+        StateDirectory = "hindsight-embeddings";
+        StateDirectoryMode = "0700";
+        Restart = "on-failure";
+        RestartSec = "10s";
+        TimeoutStartSec = "2min";
+        LimitCORE = 0;
+      };
+    };
     hindsight-postgres = {
       Unit.Description = "User-owned PostgreSQL with pgvector for Hindsight";
       Service = {
@@ -497,7 +573,9 @@ in
         Wants = [
           "hindsight-postgres.service"
         ];
+        Requires = [ "hindsight-embeddings.service" ];
         After = [
+          "hindsight-embeddings.service"
           "hindsight-postgres.service"
           "hindsight-codex-install.service"
           "hindsight-claude-install.service"

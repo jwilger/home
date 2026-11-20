@@ -1,33 +1,46 @@
-# Hindsight on the M4
+# Hindsight local inference
 
 ## Runtime
 
-Home Manager owns the daemon, PostgreSQL and configuration on the Linux host.
-Ollama runs on the Mac at `100.98.58.77:11434`, reachable only through the trusted
+Home Manager owns the daemon, PostgreSQL and embedding runner on the Linux host.
+The Mac's Ollama at `100.98.58.77:11434` serves `qwen3-coder:30b` for extraction,
+reflection, consolidation and page refresh. It is reachable over the trusted
 Tailscale network. Do not publish Ollama's unauthenticated API to the Internet.
 
-Required models:
+The Linux CPU runner (`hindsight-embeddings.service`, `127.0.0.1:11435`) serves
+`qwen3-embedding:0.6b` for all embeddings. Hybrid page search needs a query
+embedding; serving it separately prevents it from queuing behind 30B generation.
+The manifest and weights are pinned to the same 1,024-dimensional Q8_0 model that
+produced the stored vectors. This routing change does not require re-embedding.
+There is no search fallback and no cloud inference fallback.
 
-- `qwen3-coder:30b`: extraction, reflection, consolidation and page refresh.
-- `qwen3-embedding:0.6b`: 1,024-dimensional embeddings.
+The LLM context window is 32,768 tokens with one concurrent LLM call. Embedding
+batches are eight texts with one request in flight. `ollama` is a dummy API key,
+not a credential. `~/.hindsight/openai.env` is a legacy filename for the managed
+inference and database settings.
 
-The LLM context window is 32,768 tokens and requests are limited to one concurrent
-LLM call. Embedding batches are eight texts with one request in flight. There is
-no cloud fallback. `ollama` is a dummy API key, not a credential. The startup
-wrapper no longer sources `~/.envrc` or fetches an OpenAI key. The managed
-`~/.hindsight/openai.env` filename is retained for upgrade compatibility.
+## Activating a routing change
 
-To diagnose availability without sending any memory content:
+Switch the Home Manager generation and start `hindsight-embeddings.service`.
+Confirm it is ready before restarting Hindsight. The detached API does not
+reload environment changes: stop `hindsight-daemon-start.timer`, send `SIGTERM`
+to the Hindsight API process listening on 9077 (confirm its PID with `ss -ltnp`),
+and wait for it to exit. Then start `hindsight-daemon-start.service` and restore
+the timer. Keep PostgreSQL running; this does not change the database.
 
 ```sh
-curl --noproxy '*' --fail http://100.98.58.77:11434/api/tags
+systemctl --user status hindsight-embeddings.service
+curl --noproxy '*' --fail http://127.0.0.1:11435/api/tags
 curl --noproxy '*' --fail http://127.0.0.1:9077/health
-systemctl --user status hindsight-daemon-start.service
+curl --noproxy '*' --fail --get --max-time 7 \
+  http://127.0.0.1:9077/v1/default/banks/coding-agent%3A%3Ahome/knowledge-base/search \
+  --data-urlencode 'q=local inference and agent memory' --data 'limit=3' \
+  | jq '.results | map(.name)'
 ```
 
 A healthy API alone does not prove inference works. Verify an actual synthetic
-retain and recall through Hindsight after changes. Check that per-operation and
-bank-specific model routes do not override the local settings. Do not print keys,
+retain and recall when changing model configuration. Check that per-operation and
+bank-specific routes do not override the local settings. Do not print keys,
 profile contents, private memory text or full process environments into logs.
 
 ## Changing an existing embedding space
@@ -51,7 +64,7 @@ new routing configuration:
 4. Generate replacement vectors for **every** row in `memory_units` and
    `mental_models` into temporary 1,024-dimensional columns. Match Hindsight's
    date/entity augmentation for facts and `name + " " + content` for mental models.
-   Use only the Mac's embedding endpoint; do not re-extract documents. Sanitize
+   Use the target embedding endpoint; do not re-extract documents. Sanitize
    recognizable credential literals before sending text. Validate response counts,
    dimensions, finite values and nonzero vectors. Checkpoint batches so failures
    can resume without touching the original.

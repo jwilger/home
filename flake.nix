@@ -342,7 +342,7 @@
                   test "$HINDSIGHT_API_LLM_MODEL" = qwen3-coder:30b
                   test "$HINDSIGHT_API_LLM_BASE_URL" = http://100.98.58.77:11434
                   test "$HINDSIGHT_API_EMBEDDINGS_PROVIDER" = openai
-                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL" = http://100.98.58.77:11434/v1
+                  test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL" = http://127.0.0.1:11435/v1
                   test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL" = qwen3-embedding:0.6b
                   test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY" = ollama
                   test "$HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS" = 1024
@@ -353,10 +353,29 @@
                   esac
                 )
 
-                test -f "$homeFiles/.config/systemd/user/hindsight-postgres.service"
-                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.service"
-                test -f "$homeFiles/.config/systemd/user/hindsight-codex-install.timer"
-                test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.service"
+                units="$homeFiles/.config/systemd/user"
+                embeddings="$units/hindsight-embeddings.service"
+                daemon="$units/hindsight-daemon-start.service"
+                grep -Fq 'OLLAMA_HOST=127.0.0.1:11435' "$embeddings"
+                grep -Fq 'OLLAMA_NO_CLOUD=1' "$embeddings"
+                grep -Fq 'ExecStartPre=' "$embeddings"
+                grep -Fq 'ExecStartPost=' "$embeddings"
+                grep -Fxq 'Environment=OLLAMA_MODELS=%S/hindsight-embeddings/models' "$embeddings"
+                grep -Fxq 'Requires=hindsight-embeddings.service' "$daemon"
+                grep -Fxq 'After=hindsight-embeddings.service' "$daemon"
+                models="$(sed -n 's/^Environment=HINDSIGHT_EMBEDDING_MODEL_SOURCE=//p' "$embeddings")"
+                test -n "$models"
+                manifest="$models/manifests/registry.ollama.ai/library/qwen3-embedding/0.6b"
+                test -f "$manifest"
+                test ! -L "$manifest"
+                echo 'ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d' " $manifest" | sha256sum -c
+                for digest in $(jq -r '.config.digest, .layers[].digest' "$manifest"); do
+                  test -s "$models/blobs/''${digest/:/-}"
+                done
+
+                test -f "$units/hindsight-postgres.service"
+                test -f "$units/hindsight-codex-install.service"
+                test -f "$units/hindsight-codex-install.timer"
                 test -f "$homeFiles/.config/systemd/user/hindsight-daemon-start.timer"
                 test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.service"
                 test -f "$homeFiles/.config/systemd/user/hindsight-codex-history-import.timer"
@@ -378,6 +397,7 @@
                   runtime="$(sed -n 's/.*node \([^ ]*\)\/installer.js.*/\1/p' "$shared")"
                   test -f "$runtime/codex-stop-hook.js"
                   grep -Fq 'function stageRuntime(c) { return c;' "$runtime/installer.js"
+                  grep -Fq 'const hits = await client.searchKnowledgePages(args.query);' "$runtime/mcp-server.js"
                 done
                 test ! -e "$homeFiles/.codex/config.toml"
                 test ! -e "$homeFiles/.codex/hooks.json"
