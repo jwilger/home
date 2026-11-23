@@ -17,6 +17,9 @@ audio bus, and opens OBS. It does **not** start recording or streaming.
   identities are used instead of changing `/dev/videoN` numbers. Re-select a
   device in source Properties if you replace/disconnect that hardware.
 
+For the T14's default mic and speakers, Chrome/Zoom tests, and what to capture
+if the Yeti disappears, see [Desk and meeting audio](t14-audio.md).
+
 ## One-time device and screen selection
 
 1. Connect the OBSBOT and Blue mic; choose your **headphones** as the desktop

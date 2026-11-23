@@ -121,6 +121,26 @@
       };
 
       checks.${system} = {
+        t14-audio =
+          let
+            files = host: self.homeConfigurations."jwilger@${host}".config.xdg.configFile;
+            key = "wireplumber/wireplumber.conf.d/60-t14-desk-audio.conf";
+          in
+          assert !(builtins.hasAttr key (files "gregor"));
+          assert (files "jwilger-t14").${key}.enable;
+          pkgs.runCommand "check-t14-audio"
+            {
+              nativeBuildInputs = [
+                pkgs.gobject-introspection
+                (pkgs.python3.withPackages (ps: [ ps.pygobject3 ]))
+              ];
+              buildInputs = [ pkgs.wireplumber ];
+              T14_AUDIO_CONF = (files "jwilger-t14").${key}.source;
+            }
+            ''
+              python3 ${./tests/test_t14_audio.py} -v
+              touch "$out"
+            '';
         obs-podcast =
           pkgs.runCommand "check-obs-podcast"
             {
